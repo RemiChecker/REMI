@@ -12,7 +12,7 @@
   <style>
     :root { --blue:#0a84ff; --muted:#666; --ok:#0a7d2f; --warn:#a02a00; }
     *{box-sizing:border-box}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:1rem auto;max-width:1150px;padding:0 1rem}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:1rem auto;max-width:1150px;padding:0 1rem;background:#fff}
     header{display:flex;gap:12px;align-items:center}
     h1{font-size:1.45rem;margin:.5rem 0}
     h2{margin:.7rem 0 .35rem}
@@ -39,12 +39,14 @@
     .actions{display:flex;gap:.5rem;flex-wrap:wrap;margin:.6rem 0}
   </style>
 
-  <!-- Libs (robust, keine ES-Module) -->
+  <!-- Libs -->
   <script src="https://cdn.jsdelivr.net/npm/idb-keyval@6/dist/idb-keyval-iife.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.js"></script>
   <script>pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.min.js";</script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+  <!-- Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
   <div id="toast" class="toast"></div>
@@ -52,12 +54,12 @@
   <header>
     <div>
       <h1>Presse Remi – Abgleich</h1>
-      <div class="muted">Lokale Speicherung (auf diesem Gerät). Offline nutzbar.</div>
-      <div class="banner">ℹ️ Hinweis: Rechnungen & Remissionen werden nur <u>3 Monate</u> intern gespeichert. Ältere Einträge löscht die App automatisch.</div>
+      <div class="muted">Lokale Speicherung. Offline nutzbar.</div>
+      <div class="banner">ℹ️ Rechnungen & Remissionen werden nur <u>3 Monate</u> intern gespeichert. Ältere Einträge werden automatisch gelöscht.</div>
     </div>
     <div style="margin-left:auto;display:flex;gap:.5rem;align-items:center;">
       <button id="forceUpdate">Update erzwingen</button>
-      <span class="pill">v10 – 29.09.2025</span>
+      <span class="pill">v10 – 30.09.2025</span>
     </div>
   </header>
 
@@ -70,10 +72,7 @@
   <!-- Übersicht -->
   <section data-view="main">
     <h2>1) Daten eingeben</h2>
-    <p class="muted">
-      Option A: <b>Daten hier einfügen</b> und auf <b>Speichern</b> klicken.<br>
-      Option B: <b>Datei importieren</b> (EML, PDF, JSON). Die App erkennt Paket-Nr., Rechnungs-Nr. und Kundennummer automatisch.
-    </p>
+    <p class="muted">Option A: JSON hier einfügen und speichern. • Option B: Datei importieren (PDF, EML, JSON). • Option C: per Gmail abrufen.</p>
     <textarea id="inputArea" placeholder='{"kundennummer":"24719","pakete":[{"nr":"728","datum":"2025-09-15","status":"offen","rechnungen":["2025380500520"]}]}'></textarea>
     <div class="actions">
       <button id="saveBtn" class="primary">Speichern</button>
@@ -84,8 +83,11 @@
       <button id="exportJson">JSON</button>
       <label>
         <input id="importFile" type="file" accept=".json,.eml,application/pdf" style="display:none">
-        <button id="importBtn">Import Datei (EML/PDF/JSON)</button>
+        <button id="importBtn">Import Datei</button>
       </label>
+      <span style="flex:1"></span>
+      <button id="gmailConnect">Gmail verbinden</button>
+      <button id="gmailFetch" disabled>E-Mails abrufen</button>
     </div>
 
     <div class="drop" id="dropZone">Oder Datei per Drag&Drop hier ablegen</div>
@@ -116,9 +118,10 @@
       <div>Erlaubter Absender 1</div><input id="allowed1" placeholder="z.B. remi@qtrado.de">
       <div>Erlaubter Absender 2</div><input id="allowed2" placeholder="optional">
       <div>Erlaubter Absender 3</div><input id="allowed3" placeholder="optional">
+      <div>Suchwörter</div><input id="keywords" placeholder="z.B. Remission, Rechnung, Qtrado">
       <div></div><button id="settingsSave" class="primary">Speichern</button>
     </div>
-    <p class="muted">Nur Mails von diesen Absendern werden verarbeitet (wenn Gmail später aktiviert ist).</p>
+    <p class="muted">Nur Mails von diesen Absendern werden verarbeitet (Leserechte – keine Löschung in Gmail).</p>
   </section>
 
   <!-- Statistik -->
@@ -128,7 +131,11 @@
   </section>
 
   <script>
-/* ===== 0) Auto-Clean (Cache & alte Service Worker) ===== */
+/* ===== 0) Google Client-ID (DEINE ist eingetragen) ===== */
+const GOOGLE_CLIENT_ID = "836994805779-78af1p2hpubikdbklk0086s93j165lv5.apps.googleusercontent.com";
+let gisClient=null, accessToken=null;
+
+/* ===== 1) Auto-Clean: alte Service Worker & Caches entfernen ===== */
 (async () => {
   try {
     if ('serviceWorker' in navigator) {
@@ -139,25 +146,26 @@
       const keys = await caches.keys();
       await Promise.all(keys.map(k => caches.delete(k)));
     }
-  } catch (e) { console.warn('Auto-Clean:', e); }
+  } catch(e){ console.warn('Auto-Clean:', e); }
 })();
 
-/* ===== 1) Stabiler Speicher: idb-keyval + Fallback localStorage ===== */
+/* ===== 2) Speicher: idb-keyval + Fallback auf localStorage ===== */
 const __idb = window.idbKeyval || {
-  get: async (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } },
-  set: async (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
-  del: async (k) => { try { localStorage.removeItem(k); } catch {} }
+  get: async (k) => { try { return JSON.parse(localStorage.getItem(k)||'null'); } catch { return null; } },
+  set: async (k,v)=>{ try { localStorage.setItem(k,JSON.stringify(v)); } catch {} },
+  del: async (k)=>{ try { localStorage.removeItem(k); } catch {} }
 };
 const { get, set, del } = __idb;
 
-/* ===== 2) Utils ===== */
-const KEY = 'presse-remi-daten-v10';
-const SETTINGS_KEY = 'presse-remi-settings-v10';
-const readStore = ()=> get(KEY).then(x=>x||{kundennummer:'', pakete:[]});
-const writeStore = (obj)=> set(KEY, obj);
-const readSettings = ()=> get(SETTINGS_KEY).then(x=>x||{allowed1:'',allowed2:'',allowed3:''});
-const writeSettings = (obj)=> set(SETTINGS_KEY, obj);
+const KEY='presse-remi-daten-v10';
+const SETTINGS_KEY='presse-remi-settings-v10';
 
+const readStore = ()=> get(KEY).then(x=>x||{kundennummer:'',pakete:[]});
+const writeStore = (obj)=> set(KEY,obj);
+const readSettings = ()=> get(SETTINGS_KEY).then(x=>x||{allowed1:'',allowed2:'',allowed3:'',keywords:'Remission,Rechnung,Qtrado'});
+const writeSettings = (obj)=> set(SETTINGS_KEY,obj);
+
+const toast = (m)=>{const el=document.getElementById('toast'); el.textContent=m; el.style.display='block'; setTimeout(()=>el.style.display='none',2600);};
 const norm = s => (s||'').toString().toLowerCase();
 const fmtEuro = n => (typeof n==='number') ? new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(n) : '';
 const parseDateAny = s=>{
@@ -167,33 +175,29 @@ const parseDateAny = s=>{
   return null;
 };
 const inRange = (d,from,to)=>{
-  if(!d) return false;
-  const F=from?new Date(from+'T00:00:00'):null, T=to?new Date(to+'T23:59:59'):null;
+  if(!d) return false; const F=from?new Date(from+'T00:00:00'):null, T=to?new Date(to+'T23:59:59'):null;
   if(F && d<F) return false; if(T && d>T) return false; return true;
 };
-const toast = (msg)=>{ const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; setTimeout(()=>el.style.display='none', 2600); };
+function threeMonthsAgo(){ const d=new Date(); d.setMonth(d.getMonth()-3); d.setHours(0,0,0,0); return d; }
+function pruneOld(data){
+  const before=(data.pakete||[]).length, cutoff=threeMonthsAgo(); const keep=[];
+  for(const p of (data.pakete||[])){ const d=parseDateAny(p.datum); if(!d || d<cutoff) continue; keep.push(p); }
+  data.pakete=keep; const removed=before-keep.length; if(removed>0) toast(`Aufgeräumt: ${removed} ältere Einträge entfernt`);
+  return data;
+}
 
-/* ===== 3) Tabs ===== */
-const TABS = Array.from(document.querySelectorAll('.tab'));
-const VIEWS = Array.from(document.querySelectorAll('section[data-view]'));
+/* ===== 3) UI-Grundlogik (Tabs & Render) ===== */
+const TABS=[...document.querySelectorAll('.tab')], VIEWS=[...document.querySelectorAll('section[data-view]')];
 function setTab(name){ TABS.forEach(t=>t.classList.toggle('active',t.dataset.tab===name)); VIEWS.forEach(v=>v.style.display=v.dataset.view===name?'':'none'); }
 TABS.forEach(t=>t.addEventListener('click',()=>setTab(t.dataset.tab)));
 
-/* ===== 4) Elemente ===== */
-const inputArea=document.getElementById('inputArea');
-const overview=document.getElementById('overview');
-const kdnrSelect=document.getElementById('kdnrSelect');
-const searchInput=document.getElementById('searchInput');
-const dateFrom=document.getElementById('dateFrom');
-const dateTo=document.getElementById('dateTo');
-const totals=document.getElementById('totals');
-const badgeCount=document.getElementById('badgeCount');
-const badgeMissing=document.getElementById('badgeMissing');
-const badgeSum=document.getElementById('badgeSum');
-const dropZone=document.getElementById('dropZone');
+const inputArea=document.getElementById('inputArea'), overview=document.getElementById('overview');
+const kdnrSelect=document.getElementById('kdnrSelect'), searchInput=document.getElementById('searchInput');
+const dateFrom=document.getElementById('dateFrom'), dateTo=document.getElementById('dateTo');
+const totals=document.getElementById('totals'), badgeCount=document.getElementById('badgeCount');
+const badgeMissing=document.getElementById('badgeMissing'), badgeSum=document.getElementById('badgeSum');
 let onlyMissing=false;
 
-/* ===== 5) Render ===== */
 function fillKdnrDropdown(kdnrs){
   const cur=kdnrSelect.value;
   kdnrSelect.innerHTML='<option value="">Alle Kunden</option>'+kdnrs.map(k=>`<option>${k}</option>`).join('');
@@ -224,7 +228,7 @@ function rowHtml(p,k){
 function render(data){
   const gk=data.kundennummer||'';
   const listAll=(data.pakete||[]).map(p=>({...p,_k:p.kundennummer||gk}));
-  const q=norm(searchInput.value); const ksel=kdnrSelect.value; const f=dateFrom.value; const t=dateTo.value;
+  const q=norm(searchInput?.value), ksel=kdnrSelect?.value, f=dateFrom?.value, t=dateTo?.value;
   const list=listAll.filter(p=>{
     const d=parseDateAny(p.datum);
     return (!ksel || p._k===ksel)
@@ -235,16 +239,17 @@ function render(data){
   overview.innerHTML = list.length ? list.map(p=>rowHtml(p,p._k)).join('') : '<div class="muted">Keine Treffer…</div>';
   const s=computeStats({pakete:list});
   if(list.length){ totals.hidden=false; badgeCount.textContent=`${s.pakete} Pakete`; badgeMissing.textContent=`${s.fehlt} fehlend`; badgeSum.textContent=`Summe: ${fmtEuro(s.sum)}`; } else { totals.hidden=true; }
-  const sAll=computeStats(data);
-  document.getElementById('statsBox').innerHTML=`Pakete: ${sAll.pakete} • Artikel geprüft: ${sAll.artikel} • Fehler: ${sAll.fehler} • Fehlend: ${sAll.fehlt}`;
+  const sAll=computeStats(data); const box=document.getElementById('statsBox');
+  if(box) box.innerHTML=`Pakete: ${sAll.pakete} • Artikel geprüft: ${sAll.artikel} • Fehler: ${sAll.fehler} • Fehlend: ${sAll.fehlt}`;
 }
 
-/* ===== 6) Datei-Import (JSON/EML/PDF) ===== */
-document.getElementById('importBtn')?.addEventListener('click', ()=>document.getElementById('importFile').click());
-document.getElementById('importFile')?.addEventListener('change', async e=>{
+/* ===== 4) Datei-Import (JSON/EML/PDF + Drag&Drop) ===== */
+document.getElementById('importBtn').addEventListener('click', ()=>document.getElementById('importFile').click());
+document.getElementById('importFile').addEventListener('change', async e=>{
   for (const f of Array.from(e.target.files||[])) await handleFile(f);
   e.target.value='';
 });
+const dropZone=document.getElementById('dropZone');
 ['dragenter','dragover'].forEach(ev=>dropZone.addEventListener(ev,e=>{e.preventDefault(); dropZone.style.background='#eef3ff';}));
 ['dragleave','drop'].forEach(ev=>dropZone.addEventListener(ev,e=>{e.preventDefault(); dropZone.style.background='#f8faff';}));
 dropZone.addEventListener('drop', async e=>{
@@ -278,7 +283,7 @@ function extractTextFromEML(raw){
 function scanTextForFields(t){
   const paket=(t.match(/paket(?:nr|nummer)?\s*[-: ]\s*([0-9]{3,})/i) || t.match(/Paket\s*([0-9]{3,})/i))?.[1];
   const kdnr=(t.match(/kunden(?:nr|nummer)?\s*[-: ]\s*([0-9]{3,})/i) || t.match(/Kdnr\.?\s*([0-9]{3,})/i))?.[1];
-  const re=Array.from(t.matchAll(/(?:rechnung(?:s)?nr|rg|rechnungsnummer)\s*[-: ]\s*([0-9]{5,})/ig)).map(m=>m[1]);
+  const re=Array.from(t.matchAll(/(?:rechnung(?:s)?nr|rg|rechnungsnummer)\s*[-: ]\s*([0-9]{6,})/ig)).map(m=>m[1]);
   const dateIso=(t.match(/(20[2-5][0-9]-[01][0-9]-[0-3][0-9])/))?.[1];
   const dateDe=(t.match(/([0-3][0-9]\.[01][0-9]\.20[2-5][0-9])/))?.[1];
   const datum=dateIso || (dateDe ? dateDe.split('.').reverse().join('-') : '');
@@ -293,34 +298,25 @@ async function mergeParsedIntoStore(parsed){
   if(parsed.kdnr) p.kundennummer=parsed.kdnr;
   if(parsed.datum && !p.datum) p.datum=parsed.datum;
   if(parsed.rechnungen?.length){ const set=new Set([...(p.rechnungen||[]), ...parsed.rechnungen]); p.rechnungen=Array.from(set); }
-  data=pruneOld(data); await writeStore(data); inputArea.value=JSON.stringify(data,null,2); render(data);
+  data=pruneOld(data); await writeStore(data);
+  inputArea.value=JSON.stringify(data,null,2); render(data);
   return true;
 }
 async function importEML(file){
   const raw=await file.text(); const headers=raw.split(/\r?\n\r?\n/)[0]||''; const body=extractTextFromEML(raw);
-  const text=headers+'\n'+body+'\n'+file.name; const parsed=scanTextForFields(text);
-  const ok=await mergeParsedIntoStore(parsed);
+  const text=headers+'\n'+body+'\n'+file.name;
+  const ok=await mergeParsedIntoStore( scanTextForFields(text) );
   toast(ok ? 'EML importiert ✅' : 'Keine relevanten Daten gefunden');
 }
 async function importPDF(file){
   const buf=await file.arrayBuffer(); const pdf=await pdfjsLib.getDocument({data:buf}).promise;
   let t=''; for(let i=1;i<=pdf.numPages;i++){ const page=await pdf.getPage(i); const c=await page.getTextContent(); t+=c.items.map(it=>it.str).join(' ')+'\n'; }
-  const parsed=scanTextForFields(t+'\n'+file.name);
-  const ok=await mergeParsedIntoStore(parsed);
+  const ok=await mergeParsedIntoStore( scanTextForFields(t+'\n'+file.name) );
   toast(ok ? 'PDF importiert ✅' : 'Keine relevanten Daten gefunden');
 }
 
-/* ===== 7) 3-Monats-Auto-Löschung ===== */
-function threeMonthsAgo(){ const d=new Date(); d.setMonth(d.getMonth()-3); d.setHours(0,0,0,0); return d; }
-function pruneOld(data){
-  const before=(data.pakete||[]).length, cutoff=threeMonthsAgo(); const keep=[];
-  for(const p of (data.pakete||[])){ const d=parseDateAny(p.datum); if(!d || d<cutoff) continue; keep.push(p); }
-  data.pakete=keep; const removed=before-keep.length; if(removed>0) toast(`Aufgeräumt: ${removed} ältere Einträge entfernt`);
-  return data;
-}
-
-/* ===== 8) Export ===== */
-function exportJSON(data){
+/* ===== 5) Export ===== */
+function exportJSONdata(data){
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remi-export.json'; a.click();
 }
@@ -341,13 +337,13 @@ async function exportPDFdoc(data){
   doc.save('remi-export.pdf');
 }
 
-/* ===== 9) Buttons / Events ===== */
+/* ===== 6) Buttons & Events ===== */
 document.getElementById('forceUpdate').addEventListener('click', async ()=>{
   try{
     if('serviceWorker' in navigator){ const regs=await navigator.serviceWorker.getRegistrations(); for(const r of regs) await r.unregister(); }
     if('caches' in window){ const keys=await caches.keys(); await Promise.all(keys.map(k=>caches.delete(k))); }
   }catch(e){ console.warn(e); }
-  toast('Update erzwungen – neu laden…'); setTimeout(()=>location.reload(true), 600);
+  toast('Update erzwungen – neu laden…'); setTimeout(()=>location.reload(true),600);
 });
 document.getElementById('toggleMissing').addEventListener('click', async ()=>{ onlyMissing=!onlyMissing; toast(onlyMissing?'Nur fehlende…':'Alle anzeigen'); render(await readStore()); });
 document.getElementById('clearSearch').addEventListener('click', async ()=>{ searchInput.value=''; dateFrom.value=''; dateTo.value=''; toast('Filter zurückgesetzt'); render(await readStore()); });
@@ -362,15 +358,16 @@ document.getElementById('saveBtn').addEventListener('click', async ()=>{
 document.getElementById('loadBtn').addEventListener('click', async ()=>{ let d=await readStore(); d=pruneOld(d||{kundennummer:'',pakete:[]}); await writeStore(d); inputArea.value=JSON.stringify(d,null,2); toast('Geladen ✅'); render(d); });
 document.getElementById('clearBtn').addEventListener('click', async ()=>{ await del(KEY); inputArea.value=''; toast('Gelöscht ✅'); render({kundennummer:'',pakete:[]}); });
 
-document.getElementById('exportJson').addEventListener('click', async ()=>exportJSON(await readStore()));
+document.getElementById('exportJson').addEventListener('click', async ()=>exportJSONdata(await readStore()));
 document.getElementById('exportCsv').addEventListener('click', async ()=>exportCSV(await readStore()));
 document.getElementById('exportPdf').addEventListener('click', async ()=>exportPDFdoc(await readStore()));
 
-/* ===== 10) Einstellungen speichern/laden ===== */
+/* ===== 7) Einstellungen ===== */
 document.getElementById('settingsSave').addEventListener('click', async ()=>{
   const s={ allowed1:document.getElementById('allowed1').value.trim(),
             allowed2:document.getElementById('allowed2').value.trim(),
-            allowed3:document.getElementById('allowed3').value.trim() };
+            allowed3:document.getElementById('allowed3').value.trim(),
+            keywords:document.getElementById('keywords').value.trim()||'Remission,Rechnung,Qtrado' };
   await writeSettings(s); toast('Einstellungen gespeichert ✅');
 });
 async function loadSettingsToUI(){
@@ -378,9 +375,71 @@ async function loadSettingsToUI(){
   document.getElementById('allowed1').value=s.allowed1||'';
   document.getElementById('allowed2').value=s.allowed2||'';
   document.getElementById('allowed3').value=s.allowed3||'';
+  document.getElementById('keywords').value=s.keywords||'Remission,Rechnung,Qtrado';
 }
 
-/* ===== 11) Init ===== */
+/* ===== 8) Gmail Login & Abruf inkl. Parser ===== */
+function buildGmailQuery(s){
+  const senders=[s.allowed1,s.allowed2,s.allowed3].filter(Boolean).map(a=>`from:${a}`).join(' OR ');
+  const words=(s.keywords||'').split(',').map(w=>w.trim()).filter(Boolean).map(w=>`"${w}"`).join(' OR ');
+  return [senders?`(${senders})`:'', words?`(${words})`:'', 'newer_than:90d'].filter(Boolean).join(' ');
+}
+document.getElementById('gmailConnect').addEventListener('click',()=>{
+  gisClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: 'https://www.googleapis.com/auth/gmail.readonly',
+    callback: (resp)=>{
+      if(resp && resp.access_token){ accessToken=resp.access_token; document.getElementById('gmailFetch').disabled=false; toast('Gmail verbunden ✅'); }
+      else toast('Login abgebrochen');
+    }
+  });
+  gisClient.requestAccessToken();
+});
+document.getElementById('gmailFetch').addEventListener('click', async ()=>{
+  try{
+    if(!accessToken){ toast('Bitte zuerst „Gmail verbinden“'); return; }
+    const s=await readSettings(); const query=buildGmailQuery(s);
+    const listUrl=`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=50`;
+    const list=await fetch(listUrl,{headers:{Authorization:`Bearer ${accessToken}`}}).then(r=>r.json());
+    if(!list.messages?.length){ toast('Keine passenden Mails gefunden'); return; }
+
+    let imported=0;
+    for(const m of list.messages){
+      const msg=await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=full`,{headers:{Authorization:`Bearer ${accessToken}`}}).then(r=>r.json());
+
+      // Betreff + Plaintext parsen
+      const subject=(msg.payload?.headers||[]).find(h=>h.name==='Subject')?.value||'';
+      let bodyText=''; const parts=msg.payload?.parts||[];
+      const plain=parts.find(p=>p.mimeType==='text/plain')||msg.payload;
+      if(plain?.body?.data){ bodyText = atob(plain.body.data.replace(/-/g,'+').replace(/_/g,'/')); }
+      let ok = await mergeParsedIntoStore( scanTextForFields(subject+'\n'+bodyText) );
+
+      // PDF-Anhänge parsen (auch verschachtelte Parts berücksichtigen)
+      const allParts = (function flatten(p){ return p.flatMap(x=> x.parts ? flatten(x.parts) : [x]); })(parts||[]);
+      const pdfParts = allParts.filter(p=>p?.mimeType==='application/pdf');
+      for(const p of pdfParts){
+        const attId=p.body?.attachmentId; if(!attId) continue;
+        const att=await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}/attachments/${attId}`,{headers:{Authorization:`Bearer ${accessToken}`}}).then(r=>r.json());
+        if(!att.data) continue;
+        const bin = Uint8Array.from(atob(att.data.replace(/-/g,'+').replace(/_/g,'/')), c=>c.charCodeAt(0));
+        const blob = new Blob([bin],{type:'application/pdf'});
+        // PDF zu Text
+        const pdf=await pdfjsLib.getDocument({data:await blob.arrayBuffer()}).promise;
+        let t=''; for(let i=1;i<=pdf.numPages;i++){ const page=await pdf.getPage(i); const c=await page.getTextContent(); t+=c.items.map(it=>it.str).join(' ')+'\n'; }
+        const ok2 = await mergeParsedIntoStore( scanTextForFields(t) );
+        ok = ok || ok2;
+      }
+      if(ok) imported++;
+    }
+    toast(`E-Mails verarbeitet: ${imported} ✅`);
+  }catch(e){ console.error(e); toast('Gmail-Fehler: '+(e.message||e)); }
+});
+
+/* ===== 9) Init ===== */
+document.getElementById('exportJson').addEventListener('click', async ()=>exportJSONdata(await readStore()));
+document.getElementById('exportCsv').addEventListener('click', async ()=>exportCSV(await readStore()));
+document.getElementById('exportPdf').addEventListener('click', async ()=>exportPDFdoc(await readStore()));
+
 (async ()=>{
   setTab('main');
   await loadSettingsToUI();
