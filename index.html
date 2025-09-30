@@ -41,10 +41,19 @@
 
   <!-- Libs -->
   <script src="https://cdn.jsdelivr.net/npm/idb-keyval@6/dist/idb-keyval-iife.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.js"></script>
-  <script>pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.min.js";</script>
+
+  <!-- PDF.js (cdnjs, fester Worker – verhindert „pdfjsLib not found“) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    window.pdfjsLib ||= window['pdfjs-dist/build/pdf'];
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  </script>
+
+  <!-- Export-Tools -->
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+
   <!-- Google Identity Services -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
@@ -59,7 +68,7 @@
     </div>
     <div style="margin-left:auto;display:flex;gap:.5rem;align-items:center;">
       <button id="forceUpdate">Update erzwingen</button>
-      <span class="pill">v10 – Vollversion</span>
+      <span class="pill">Vollversion</span>
     </div>
   </header>
 
@@ -118,10 +127,10 @@
       <div>Erlaubter Absender 1</div><input id="allowed1" placeholder="z.B. remi@qtrado.de">
       <div>Erlaubter Absender 2</div><input id="allowed2" placeholder="optional">
       <div>Erlaubter Absender 3</div><input id="allowed3" placeholder="optional">
-      <div>Suchwörter</div><input id="keywords" placeholder="z.B. Remission, Rechnung, Qtrado" value="Remission,Rechnung">
+      <div>Suchwörter</div><input id="keywords" placeholder="z.B. Remission, Rechnung" value="Remission,Rechnung">
       <div></div><button id="settingsSave" class="primary">Speichern</button>
     </div>
-    <p class="muted">Nur Mails von diesen Absendern werden verarbeitet. Standard: nur @qtrado.de.</p>
+    <p class="muted">Standard: es werden nur Absender mit „@qtrado.de“ verarbeitet.</p>
   </section>
 
   <!-- Statistik -->
@@ -131,11 +140,11 @@
   </section>
 
   <script>
-/* ===== 0) Google Client-ID (richtig) ===== */
+/* ===== 0) Google Client-ID (korrekt) ===== */
 const GOOGLE_CLIENT_ID = "836994805779-78af1p2hpubkidbklko086s93j165lv5.apps.googleusercontent.com";
 let gisClient=null, accessToken=null;
 
-/* ===== 1) Auto-Clean (alte SW/Caches) ===== */
+/* ===== 1) Auto-Clean (SW/Caches weg) ===== */
 (async()=>{try{
   if('serviceWorker' in navigator){const r=await navigator.serviceWorker.getRegistrations();for(const x of r) await x.unregister();}
   if('caches' in window){const k=await caches.keys();await Promise.all(k.map(c=>caches.delete(c)));}
@@ -188,7 +197,7 @@ async function mergeParsedIntoStore(parsed){
   return true;
 }
 
-/* ===== 5) UI Grundlogik ===== */
+/* ===== 5) UI ===== */
 const TABS=[...document.querySelectorAll('.tab')], VIEWS=[...document.querySelectorAll('section[data-view]')];
 function setTab(name){TABS.forEach(t=>t.classList.toggle('active',t.dataset.tab===name)); VIEWS.forEach(v=>v.style.display=v.dataset.view===name?'':'none');}
 TABS.forEach(t=>t.addEventListener('click',()=>setTab(t.dataset.tab)));
@@ -273,7 +282,7 @@ document.getElementById('exportCsv').addEventListener('click', async ()=>exportC
 document.getElementById('exportPdf').addEventListener('click', async ()=>exportPDFdoc(await readStore()));
 document.getElementById('settingsSave').addEventListener('click', async ()=>{ const s={allowed1:document.getElementById('allowed1').value.trim(),allowed2:document.getElementById('allowed2').value.trim(),allowed3:document.getElementById('allowed3').value.trim(),keywords:document.getElementById('keywords').value.trim()||'Remission,Rechnung'}; await set(SETTINGS_KEY,s); toast('Einstellungen gespeichert ✅'); });
 
-/* ===== 9) Gmail Login & Abruf (Qtrado, 365d, 500+, inkl. PDF) ===== */
+/* ===== 9) Gmail Login & Abruf (Qtrado, 365d, Paginierung, inkl. PDF) ===== */
 document.getElementById('gmailConnect').addEventListener('click',()=>{
   if(!window.google?.accounts?.oauth2){ toast("Google API nicht geladen – neu laden"); return; }
   gisClient=google.accounts.oauth2.initTokenClient({
@@ -286,44 +295,58 @@ document.getElementById('gmailConnect').addEventListener('click',()=>{
   gisClient.requestAccessToken();
 });
 
+// Base64URL -> UTF-8 Text
+const decodeB64Url = s => {
+  try { return atob(s.replace(/-/g,'+').replace(/_/g,'/')); } catch { return ''; }
+};
+
 document.getElementById('gmailFetch').addEventListener('click', async ()=>{
   try{
     if(!accessToken){ toast("Bitte zuerst „Gmail verbinden“"); return; }
     const s=await readSettings();
-    // Basisfilter: nur Absender mit qtrado
+    // Nur Absender mit qtrado + optionale Keywords aus den Einstellungen
     const sender = ['from:qtrado','from:@qtrado.de', s.allowed1, s.allowed2, s.allowed3].filter(Boolean).join(' OR ');
     const words  = (s.keywords||'Remission,Rechnung').split(',').map(w=>w.trim()).filter(Boolean).map(w=>`"${w}"`).join(' OR ');
     const baseQ  = [`(${sender})`, words?`(${words})`:'', 'newer_than:365d'].filter(Boolean).join(' ');
     toast('Suche: '+baseQ);
 
     let imported=0, nextPageToken=null, rounds=0;
+
     do{
       rounds++;
       const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(baseQ)}&maxResults=500${nextPageToken?`&pageToken=${nextPageToken}`:''}`;
-      const list = await fetch(url,{headers:{Authorization:`Bearer ${accessToken}`}}).then(r=>r.json());
+      const listResp = await fetch(url,{headers:{Authorization:`Bearer ${accessToken}`}});
+      const list = await listResp.json();
       nextPageToken=list.nextPageToken||null;
+
+      if(!listResp.ok){
+        toast(`Gmail-Fehler: ${listResp.status}`);
+        break;
+      }
       if(!list.messages?.length) break;
 
       for(const m of list.messages){
-        const msg=await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=full`,{headers:{Authorization:`Bearer ${accessToken}`}}).then(r=>r.json());
+        const msg = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=full`,{headers:{Authorization:`Bearer ${accessToken}`}}).then(r=>r.json());
         const headers=msg.payload?.headers||[];
         const from=(headers.find(h=>h.name==='From')?.value||'').toLowerCase();
         if(!(from.includes('qtrado')||from.includes('@qtrado.de'))) continue;
 
         const subject=headers.find(h=>h.name==='Subject')?.value||'';
-        let bodyText=''; const parts=msg.payload?.parts||[]; const plain=parts.find(p=>p.mimeType==='text/plain')||msg.payload;
-        if(plain?.body?.data) bodyText=atob(plain.body.data.replace(/-/g,'+').replace(/_/g,'/'));
+        let bodyText='';
+        const parts=msg.payload?.parts||[];
+        const plain=parts.find(p=>p.mimeType==='text/plain')||msg.payload;
+        if(plain?.body?.data) bodyText=decodeB64Url(plain.body.data);
 
         let ok = await mergeParsedIntoStore( scanTextForFields(subject+'\n'+bodyText) );
 
         // PDFs parsen
-        const flatten = (p)=> (p||[]).flatMap(x=> x?.parts ? flatten(x.parts) : [x]);
+        const flatten = p => (p||[]).flatMap(x=> x?.parts ? flatten(x.parts) : [x]);
         const pdfParts = flatten(parts).filter(p=>p?.mimeType==='application/pdf');
         for(const p of pdfParts){
           const attId=p.body?.attachmentId; if(!attId) continue;
           const att=await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}/attachments/${attId}`,{headers:{Authorization:`Bearer ${accessToken}`}}).then(r=>r.json());
           if(!att.data) continue;
-          const bin = Uint8Array.from(atob(att.data.replace(/-/g,'+').replace(/_/g,'/')), c=>c.charCodeAt(0));
+          const bin = Uint8Array.from(decodeB64Url(att.data), c=>c.charCodeAt(0));
           const blob = new Blob([bin],{type:'application/pdf'});
           const text = await pdfBlobToText(blob);
           const ok2 = await mergeParsedIntoStore( scanTextForFields(text) );
@@ -331,8 +354,10 @@ document.getElementById('gmailFetch').addEventListener('click', async ()=>{
         }
         if(ok) imported++;
       }
-      // Sicherheit: breche nach 5 Runden ab (max. ~2500 Mails)
+
+      // Sicherheitsbremse (max. 5 Seiten ≈ 2500 Mails)
       if(rounds>=5) nextPageToken=null;
+
     }while(nextPageToken);
 
     toast(`Qtrado-E-Mails verarbeitet: ${imported}`);
@@ -341,12 +366,22 @@ document.getElementById('gmailFetch').addEventListener('click', async ()=>{
 
 /* ===== 10) Init ===== */
 (async ()=>{
+  // Tabs
+  const TABS=[...document.querySelectorAll('.tab')];
+  const VIEWS=[...document.querySelectorAll('section[data-view]')];
+  function setTab(name){TABS.forEach(t=>t.classList.toggle('active',t.dataset.tab===name)); VIEWS.forEach(v=>v.style.display=v.dataset.view===name?'':'none');}
+  TABS.forEach(t=>t.addEventListener('click',()=>setTab(t.dataset.tab)));
   setTab('main');
-  await set(SETTINGS_KEY, await readSettings()); // Defaults sichern
+
+  // Startdaten
   let d=await readStore(); d=pruneOld(d||{kundennummer:'',pakete:[]}); await writeStore(d);
-  inputArea.value=JSON.stringify(d,null,2);
+  document.getElementById('inputArea').value=JSON.stringify(d,null,2);
+
+  // Kdnr Dropdown füllen
   const kset=new Set(); if(d.kundennummer) kset.add(String(d.kundennummer)); (d.pakete||[]).forEach(p=>{ if(p.kundennummer) kset.add(String(p.kundennummer)); });
-  fillKdnrDropdown(Array.from(kset).sort());
+  const kdnrSelect=document.getElementById('kdnrSelect');
+  kdnrSelect.innerHTML='<option value="">Alle Kunden</option>'+Array.from(kset).sort().map(k=>`<option>${k}</option>`).join('');
+
   render(d);
   toast('App geladen ✅');
 })();
