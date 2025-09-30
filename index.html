@@ -15,7 +15,7 @@
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:1rem auto;max-width:1150px;padding:0 1rem}
     header{display:flex;gap:12px;align-items:center}
     h1{font-size:1.45rem;margin:.5rem 0}
-    h2{margin:.7rem 0 .3rem}
+    h2{margin:.7rem 0 .35rem}
     .muted{color:var(--muted);font-size:.95rem}
     .banner{margin:.75rem 0;padding:.6rem .8rem;border:1px solid #dbe5ff;background:#f4f7ff;border-radius:.6rem;color:#1a3daa}
     .pill{display:inline-block;padding:.2rem .5rem;border-radius:1rem;background:#eef3ff;color:#0a84ff;font-size:.85rem}
@@ -36,6 +36,7 @@
     .totals{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;padding:.5rem .6rem;border:1px solid #eee;border-radius:.6rem;background:#fbfbfb;margin:.5rem 0}
     .totals .badge{padding:.2rem .5rem;border:1px solid #e0e0e0;border-radius:999px}
     .drop{border:2px dashed #c9d1e6;border-radius:.6rem;padding:10px;background:#f8faff}
+    .actions{display:flex;gap:.5rem;flex-wrap:wrap;margin:.6rem 0}
   </style>
 
   <!-- Libs (robust, keine ES-Module) -->
@@ -74,7 +75,7 @@
       Option B: <b>Datei importieren</b> (EML, PDF, JSON). Die App erkennt Paket-Nr., Rechnungs-Nr. und Kundennummer automatisch.
     </p>
     <textarea id="inputArea" placeholder='{"kundennummer":"24719","pakete":[{"nr":"728","datum":"2025-09-15","status":"offen","rechnungen":["2025380500520"]}]}'></textarea>
-    <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin:.6rem 0;">
+    <div class="actions">
       <button id="saveBtn" class="primary">Speichern</button>
       <button id="loadBtn">Laden</button>
       <button id="clearBtn">Löschen</button>
@@ -90,7 +91,7 @@
     <div class="drop" id="dropZone">Oder Datei per Drag&Drop hier ablegen</div>
 
     <h2>2) Filter</h2>
-    <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+    <div class="actions">
       <select id="kdnrSelect"><option value="">Alle Kunden</option></select>
       <input id="searchInput" placeholder="Suchen… (Paket, Rechnung, Datum, Filiale)">
       <label>Von <input id="dateFrom" type="date"></label>
@@ -105,7 +106,7 @@
       <span class="badge" id="badgeSum">Summe: –</span>
     </div>
 
-    <div id="overview" class="list" style="margin-top:.6rem;"></div>
+    <div id="overview" class="list"></div>
   </section>
 
   <!-- Einstellungen -->
@@ -127,7 +128,7 @@
   </section>
 
   <script>
-/* ===== Einmal radikal aufräumen – direkt bei Seitenaufruf (Auto-Clean) ===== */
+/* ===== 0) Auto-Clean (Cache & alte Service Worker) ===== */
 (async () => {
   try {
     if ('serviceWorker' in navigator) {
@@ -141,21 +142,22 @@
   } catch (e) { console.warn('Auto-Clean:', e); }
 })();
 
-/* ===== Fehler sichtbar machen ===== */
-window.addEventListener('error', e=>{
-  const m='JS-Fehler: '+(e.error?.message||e.message);
-  console.error(m,e.error||e); alert(m);
-});
-window.addEventListener('unhandledrejection', e=>{
-  const m='Promise-Fehler: '+(e.reason?.message||e.reason||'');
-  console.error(m,e.reason); alert(m);
-});
+/* ===== 1) Stabiler Speicher: idb-keyval + Fallback localStorage ===== */
+const __idb = window.idbKeyval || {
+  get: async (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } },
+  set: async (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  del: async (k) => { try { localStorage.removeItem(k); } catch {} }
+};
+const { get, set, del } = __idb;
 
-/* ===== Utils / State ===== */
-const { get, set, del } = window.idbKeyval;
+/* ===== 2) Utils ===== */
 const KEY = 'presse-remi-daten-v10';
+const SETTINGS_KEY = 'presse-remi-settings-v10';
 const readStore = ()=> get(KEY).then(x=>x||{kundennummer:'', pakete:[]});
 const writeStore = (obj)=> set(KEY, obj);
+const readSettings = ()=> get(SETTINGS_KEY).then(x=>x||{allowed1:'',allowed2:'',allowed3:''});
+const writeSettings = (obj)=> set(SETTINGS_KEY, obj);
+
 const norm = s => (s||'').toString().toLowerCase();
 const fmtEuro = n => (typeof n==='number') ? new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(n) : '';
 const parseDateAny = s=>{
@@ -171,13 +173,13 @@ const inRange = (d,from,to)=>{
 };
 const toast = (msg)=>{ const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; setTimeout(()=>el.style.display='none', 2600); };
 
-/* ===== Tabs ===== */
+/* ===== 3) Tabs ===== */
 const TABS = Array.from(document.querySelectorAll('.tab'));
 const VIEWS = Array.from(document.querySelectorAll('section[data-view]'));
 function setTab(name){ TABS.forEach(t=>t.classList.toggle('active',t.dataset.tab===name)); VIEWS.forEach(v=>v.style.display=v.dataset.view===name?'':'none'); }
 TABS.forEach(t=>t.addEventListener('click',()=>setTab(t.dataset.tab)));
 
-/* ===== Elemente ===== */
+/* ===== 4) Elemente ===== */
 const inputArea=document.getElementById('inputArea');
 const overview=document.getElementById('overview');
 const kdnrSelect=document.getElementById('kdnrSelect');
@@ -191,7 +193,7 @@ const badgeSum=document.getElementById('badgeSum');
 const dropZone=document.getElementById('dropZone');
 let onlyMissing=false;
 
-/* ===== Render ===== */
+/* ===== 5) Render ===== */
 function fillKdnrDropdown(kdnrs){
   const cur=kdnrSelect.value;
   kdnrSelect.innerHTML='<option value="">Alle Kunden</option>'+kdnrs.map(k=>`<option>${k}</option>`).join('');
@@ -237,9 +239,9 @@ function render(data){
   document.getElementById('statsBox').innerHTML=`Pakete: ${sAll.pakete} • Artikel geprüft: ${sAll.artikel} • Fehler: ${sAll.fehler} • Fehlend: ${sAll.fehlt}`;
 }
 
-/* ===== Datei-Import (JSON/EML/PDF) ===== */
-document.getElementById('importBtn').addEventListener('click', ()=>document.getElementById('importFile').click());
-document.getElementById('importFile').addEventListener('change', async e=>{
+/* ===== 6) Datei-Import (JSON/EML/PDF) ===== */
+document.getElementById('importBtn')?.addEventListener('click', ()=>document.getElementById('importFile').click());
+document.getElementById('importFile')?.addEventListener('change', async e=>{
   for (const f of Array.from(e.target.files||[])) await handleFile(f);
   e.target.value='';
 });
@@ -308,7 +310,7 @@ async function importPDF(file){
   toast(ok ? 'PDF importiert ✅' : 'Keine relevanten Daten gefunden');
 }
 
-/* ===== 3-Monats-Auto-Löschung ===== */
+/* ===== 7) 3-Monats-Auto-Löschung ===== */
 function threeMonthsAgo(){ const d=new Date(); d.setMonth(d.getMonth()-3); d.setHours(0,0,0,0); return d; }
 function pruneOld(data){
   const before=(data.pakete||[]).length, cutoff=threeMonthsAgo(); const keep=[];
@@ -317,7 +319,29 @@ function pruneOld(data){
   return data;
 }
 
-/* ===== Buttons / Events ===== */
+/* ===== 8) Export ===== */
+function exportJSON(data){
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remi-export.json'; a.click();
+}
+function exportCSV(data){
+  const rows=[['Kdnr','Paket','Datum','Status','Rechnungen','Summe']];
+  (data.pakete||[]).forEach(p=>{
+    rows.push([p.kundennummer||data.kundennummer||'', p.nr||'', p.datum||'', p.status||'', (p.rechnungen||[]).join(' '), typeof p.summe==='number'?p.summe:'' ]);
+  });
+  const csv=rows.map(r=>r.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(';')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remi-export.csv'; a.click();
+}
+async function exportPDFdoc(data){
+  const { jsPDF } = window.jspdf;
+  const doc=new jsPDF();
+  doc.text('Presse Remi – Export', 14, 14);
+  const rows=(data.pakete||[]).map(p=>[p.kundennummer||data.kundennummer||'', p.nr||'', p.datum||'', p.status||'', (p.rechnungen||[]).join(' '), typeof p.summe==='number'?fmtEuro(p.summe):'']);
+  doc.autoTable({ head:[['Kdnr','Paket','Datum','Status','Rechnungen','Summe']], body:rows, startY:18, styles:{fontSize:9} });
+  doc.save('remi-export.pdf');
+}
+
+/* ===== 9) Buttons / Events ===== */
 document.getElementById('forceUpdate').addEventListener('click', async ()=>{
   try{
     if('serviceWorker' in navigator){ const regs=await navigator.serviceWorker.getRegistrations(); for(const r of regs) await r.unregister(); }
@@ -338,9 +362,28 @@ document.getElementById('saveBtn').addEventListener('click', async ()=>{
 document.getElementById('loadBtn').addEventListener('click', async ()=>{ let d=await readStore(); d=pruneOld(d||{kundennummer:'',pakete:[]}); await writeStore(d); inputArea.value=JSON.stringify(d,null,2); toast('Geladen ✅'); render(d); });
 document.getElementById('clearBtn').addEventListener('click', async ()=>{ await del(KEY); inputArea.value=''; toast('Gelöscht ✅'); render({kundennummer:'',pakete:[]}); });
 
-/* ===== Init ===== */
+document.getElementById('exportJson').addEventListener('click', async ()=>exportJSON(await readStore()));
+document.getElementById('exportCsv').addEventListener('click', async ()=>exportCSV(await readStore()));
+document.getElementById('exportPdf').addEventListener('click', async ()=>exportPDFdoc(await readStore()));
+
+/* ===== 10) Einstellungen speichern/laden ===== */
+document.getElementById('settingsSave').addEventListener('click', async ()=>{
+  const s={ allowed1:document.getElementById('allowed1').value.trim(),
+            allowed2:document.getElementById('allowed2').value.trim(),
+            allowed3:document.getElementById('allowed3').value.trim() };
+  await writeSettings(s); toast('Einstellungen gespeichert ✅');
+});
+async function loadSettingsToUI(){
+  const s=await readSettings();
+  document.getElementById('allowed1').value=s.allowed1||'';
+  document.getElementById('allowed2').value=s.allowed2||'';
+  document.getElementById('allowed3').value=s.allowed3||'';
+}
+
+/* ===== 11) Init ===== */
 (async ()=>{
   setTab('main');
+  await loadSettingsToUI();
   let d=await readStore(); d=pruneOld(d||{kundennummer:'',pakete:[]}); await writeStore(d);
   inputArea.value=JSON.stringify(d,null,2);
   const kset=new Set(); if(d.kundennummer) kset.add(String(d.kundennummer));
