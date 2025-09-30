@@ -10,130 +10,82 @@
   <meta name="theme-color" content="#0a84ff">
 
   <style>
-    :root { --blue:#0a84ff; --muted:#666; }
-    *{box-sizing:border-box}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:1rem auto;max-width:1150px;padding:0 1rem}
-    header{display:flex;gap:12px;align-items:center}
-    h1{font-size:1.45rem;margin:.5rem 0}
-    h2{margin:.7rem 0 .35rem}
-    .muted{color:var(--muted);font-size:.95rem}
-    .banner{margin:.75rem 0;padding:.6rem .8rem;border:1px solid #dbe5ff;background:#f4f7ff;border-radius:.6rem;color:#1a3daa}
-    .pill{display:inline-block;padding:.2rem .5rem;border-radius:1rem;background:#eef3ff;color:#0a84ff;font-size:.85rem}
-    .tabs{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem}
-    .tab{padding:.45rem .7rem;border:1px solid #d0d0d0;border-radius:.6rem;cursor:pointer}
-    .tab.active{background:#0a84ff;color:#fff;border-color:#0a84ff}
-    button{padding:.55rem .85rem;border-radius:.6rem;border:1px solid #d0d0d0;background:#fff;cursor:pointer}
+    body{font-family:sans-serif;margin:1rem auto;max-width:900px;padding:0 1rem}
+    h1{font-size:1.4rem}
+    .actions{margin:1rem 0;display:flex;gap:.5rem;flex-wrap:wrap}
+    textarea{width:100%;min-height:200px}
+    button{padding:.5rem .8rem;border:1px solid #ccc;border-radius:.5rem;cursor:pointer}
     button.primary{background:#0a84ff;color:#fff;border-color:#0a84ff}
-    textarea{width:100%;min-height:160px;border:1px solid #d0d0d0;border-radius:.6rem;padding:.6rem;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-    input[type="text"],input[type="date"],select{padding:.5rem .65rem;border:1px solid #d0d0d0;border-radius:.6rem}
-    .list{margin-top:.6rem}
-    .card{border:1px solid #e8e8e8;border-radius:.8rem;padding:.75rem .9rem;margin:.5rem 0;background:#fff}
-    details summary{list-style:none;cursor:pointer}
-    details summary::-webkit-details-marker{display:none}
-    .row{display:grid;grid-template-columns:120px 120px 1fr 120px;gap:.6rem;align-items:center}
-    .chip{display:inline-block;border:1px solid #e0e0e0;border-radius:999px;padding:.15rem .5rem;font-size:.85rem;margin:.1rem .25rem 0 0}
-    .toast{position:fixed;top:12px;right:12px;z-index:9999;background:#0a84ff;color:#fff;padding:.55rem .7rem;border-radius:.6rem;display:none}
-    .totals{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;padding:.5rem .6rem;border:1px solid #eee;border-radius:.6rem;background:#fbfbfb;margin:.5rem 0}
-    .totals .badge{padding:.2rem .5rem;border:1px solid #e0e0e0;border-radius:999px}
-    .drop{border:2px dashed #c9d1e6;border-radius:.6rem;padding:10px;background:#f8faff}
-    .actions{display:flex;gap:.5rem;flex-wrap:wrap;margin:.6rem 0}
   </style>
 
   <!-- Libs -->
   <script src="https://cdn.jsdelivr.net/npm/idb-keyval@6/dist/idb-keyval-iife.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.js"></script>
   <script>pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.min.js";</script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
   <!-- Google Identity Services -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
-  <div id="toast" class="toast"></div>
+  <h1>Presse Remi – Abgleich</h1>
+  <p>Rechnungen & Remissionen werden nur 3 Monate gespeichert (ältere werden automatisch gelöscht).</p>
 
-  <header>
-    <div>
-      <h1>Presse Remi – Abgleich</h1>
-      <div class="muted">Lokale Speicherung. Offline nutzbar.</div>
-      <div class="banner">ℹ️ Rechnungen & Remissionen werden nur <u>3 Monate</u> gespeichert. Ältere Einträge werden automatisch gelöscht.</div>
-    </div>
-    <div style="margin-left:auto;display:flex;gap:.5rem;align-items:center;">
-      <button id="forceUpdate">Update erzwingen</button>
-      <span class="pill">v10 – 30.09.2025</span>
-    </div>
-  </header>
-
-  <div class="tabs">
-    <div class="tab active" data-tab="main">Übersicht</div>
-    <div class="tab" data-tab="settings">Einstellungen</div>
-    <div class="tab" data-tab="stats">Statistik</div>
+  <div class="actions">
+    <button id="forceUpdate">Update erzwingen</button>
+    <button id="gmailConnect" class="primary">Gmail verbinden</button>
+    <button id="gmailFetch" disabled>E-Mails abrufen (nur Qtrado)</button>
   </div>
 
-  <!-- Übersicht -->
-  <section data-view="main">
-    <h2>1) Daten eingeben</h2>
-    <p class="muted">Option A: JSON hier einfügen und speichern.<br>Option B: Datei importieren (PDF, EML, JSON).<br>Option C: Direkt über Gmail abrufen.</p>
-    <textarea id="inputArea"></textarea>
-    <div class="actions">
-      <button id="saveBtn" class="primary">Speichern</button>
-      <button id="loadBtn">Laden</button>
-      <button id="clearBtn">Löschen</button>
-      <button id="exportCsv">CSV</button>
-      <button id="exportPdf">PDF</button>
-      <button id="exportJson">JSON</button>
-      <label>
-        <input id="importFile" type="file" accept=".json,.eml,application/pdf" style="display:none">
-        <button id="importBtn">Import Datei</button>
-      </label>
-      <span style="flex:1"></span>
-      <button id="gmailConnect">Gmail verbinden</button>
-      <button id="gmailFetch" disabled>E-Mails abrufen</button>
-    </div>
-
-    <div class="drop" id="dropZone">Oder Datei per Drag&Drop hier ablegen</div>
-
-    <h2>2) Filter</h2>
-    <div class="actions">
-      <select id="kdnrSelect"><option value="">Alle Kunden</option></select>
-      <input id="searchInput" placeholder="Suchen…">
-      <label>Von <input id="dateFrom" type="date"></label>
-      <label>Bis <input id="dateTo" type="date"></label>
-      <button id="toggleMissing">Nur fehlende anzeigen</button>
-      <button id="clearSearch">Leeren</button>
-    </div>
-
-    <div id="totals" class="totals" hidden>
-      <span class="badge" id="badgeCount">0 Pakete</span>
-      <span class="badge" id="badgeMissing">0 fehlend</span>
-      <span class="badge" id="badgeSum">Summe: –</span>
-    </div>
-
-    <div id="overview" class="list"></div>
-  </section>
-
-  <!-- Einstellungen -->
-  <section data-view="settings" style="display:none;">
-    <h2>Einstellungen</h2>
-    <div style="display:grid;grid-template-columns:180px 1fr;gap:.5rem .75rem;max-width:720px;">
-      <div>Erlaubter Absender 1</div><input id="allowed1" placeholder="z.B. remi@qtrado.de">
-      <div>Erlaubter Absender 2</div><input id="allowed2">
-      <div>Erlaubter Absender 3</div><input id="allowed3">
-      <div>Suchwörter</div><input id="keywords" placeholder="z.B. Remission, Rechnung, Qtrado">
-      <div></div><button id="settingsSave" class="primary">Speichern</button>
-    </div>
-  </section>
-
-  <!-- Statistik -->
-  <section data-view="stats" style="display:none;">
-    <h2>Statistik</h2>
-    <div id="statsBox" class="card"></div>
-  </section>
+  <textarea id="inputArea" placeholder="Hier erscheinen die Daten…"></textarea>
 
   <script>
-/* ===== Google Client-ID (richtig eingetragen) ===== */
+/* === Google Client-ID (deine korrekte) === */
 const GOOGLE_CLIENT_ID = "836994805779-78af1p2hpubkidbklko086s93j165lv5.apps.googleusercontent.com";
 let gisClient=null, accessToken=null;
 
+/* === Speicher (Fallback auf localStorage) === */
+const __idb = window.idbKeyval || {
+  get: async (k) => JSON.parse(localStorage.getItem(k)||'null'),
+  set: async (k,v)=> localStorage.setItem(k,JSON.stringify(v)),
+};
+const KEY='presse-remi-daten-v10';
+async function readStore(){return await __idb.get(KEY)||{kundennummer:'',pakete:[]};}
+async function writeStore(d){await __idb.set(KEY,d);}
+
+/* === Hilfsfunktionen (einfach) === */
+function scanTextForFields(t){
+  if(!t) return {};
+  const paket=(t.match(/(?:paket(?:nr|nummer)?|paket)\s*[-: ]\s*([0-9]{3,})/i) || t.match(/\bPaket\s*([0-9]{3,})\b/i))?.[1];
+  const kdnr=(t.match(/kunden(?:nr|nummer)?\s*[-: ]\s*([0-9]{3,})/i) || t.match(/\bKdnr\.?\s*([0-9]{3,})\b/i))?.[1];
+  const re=Array.from(t.matchAll(/(?:rechnung(?:s)?nr|rechnungsnummer|rg|rechnung)\s*[-: ]?\s*([0-9]{6,})/ig)).map(m=>m[1]);
+  const iso=(t.match(/(20[2-5][0-9]-[01][0-9]-[0-3][0-9])/))?.[1];
+  const de=(t.match(/([0-3][0-9]\.[01][0-9]\.20[2-5][0-9])/))?.[1];
+  const datum=iso || (de ? de.split('.').reverse().join('-') : '');
+  return {paket,kdnr,rechnungen:re,datum};
+}
+async function mergeParsedIntoStore(parsed){
+  if(!parsed.paket && !parsed.kdnr && !parsed.rechnungen?.length) return false;
+  let data=await readStore();
+  if(parsed.kdnr && !data.kundennummer) data.kundennummer=parsed.kdnr;
+  let p=(parsed.paket?data.pakete.find(x=>x.nr===parsed.paket):null);
+  if(!p){p={nr:parsed.paket||'unbekannt',datum:parsed.datum||'',status:'offen',rechnungen:[]};data.pakete.push(p);}
+  if(parsed.kdnr) p.kundennummer=parsed.kdnr;
+  if(parsed.datum && !p.datum) p.datum=parsed.datum;
+  if(parsed.rechnungen?.length){ const set=new Set([...(p.rechnungen||[]),...parsed.rechnungen]); p.rechnungen=[...set]; }
+  await writeStore(data);
+  document.getElementById('inputArea').value=JSON.stringify(data,null,2);
+  return true;
+}
+
+/* === Update erzwingen === */
+document.getElementById('forceUpdate').addEventListener('click', async ()=>{
+  try{
+    if('serviceWorker' in navigator){ const regs=await navigator.serviceWorker.getRegistrations(); for(const r of regs) await r.unregister(); }
+    if('caches' in window){ const keys=await caches.keys(); await Promise.all(keys.map(k=>caches.delete(k))); }
+  }catch(e){}
+  alert('Update erzwungen – Seite wird neu geladen'); location.reload(true);
+});
+
+/* === Gmail Login === */
 document.getElementById('gmailConnect').addEventListener('click', () => {
   if (!window.google || !google.accounts || !google.accounts.oauth2) {
     alert("Google API nicht geladen – bitte neu laden");
@@ -143,6 +95,7 @@ document.getElementById('gmailConnect').addEventListener('click', () => {
     client_id: GOOGLE_CLIENT_ID,
     scope: 'https://www.googleapis.com/auth/gmail.readonly',
     prompt: 'consent',
+    include_granted_scopes: true,
     callback: (resp) => {
       if (resp && resp.access_token) {
         accessToken = resp.access_token;
@@ -156,9 +109,51 @@ document.getElementById('gmailConnect').addEventListener('click', () => {
   gisClient.requestAccessToken();
 });
 
-document.getElementById('gmailFetch').addEventListener('click', async () => {
-  if (!accessToken) { alert("Bitte erst Gmail verbinden"); return; }
-  alert("Abruf gestartet (Dummy-Test) ✅");
+/* === Gmail Abrufen (nur Qtrado) + Parser (Betreff/Body) === */
+document.getElementById('gmailFetch').addEventListener('click', async ()=>{
+  try{
+    if(!accessToken){alert("❌ Kein Token – bitte zuerst 'Gmail verbinden' klicken.");return;}
+    // Nur Mails der letzten 90 Tage von Qtrado
+    const query = '(from:qtrado OR from:@qtrado.de) newer_than:90d';
+    alert("🔎 Suche in Gmail nach:\n" + query);
+
+    // Liste holen
+    const res = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=25`,
+      { headers:{Authorization:`Bearer ${accessToken}`} }
+    );
+    const list = await res.json();
+    if(!res.ok){ alert("❌ Gmail-Fehler ("+res.status+"): "+JSON.stringify(list)); return; }
+    if(!list.messages?.length){ alert("ℹ️ Keine Qtrado-Mails in den letzten 90 Tagen gefunden."); return; }
+
+    let imported=0;
+
+    for(const m of list.messages){
+      const msg = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=full`,
+        { headers:{Authorization:`Bearer ${accessToken}`} }
+      ).then(r=>r.json());
+      if(!msg.payload){ continue; }
+
+      // Doppelte Sicherheit: From-Header prüfen
+      const headers = msg.payload.headers||[];
+      const from = (headers.find(h=>h.name==='From')?.value || '').toLowerCase();
+      if(!(from.includes('qtrado') || from.includes('@qtrado.de'))) { continue; }
+
+      const subject = (headers.find(h=>h.name==='Subject')?.value)||'';
+      let bodyText='';
+      const parts = msg.payload.parts||[];
+      const plain = parts.find(p=>p.mimeType==='text/plain')||msg.payload;
+      if(plain?.body?.data) bodyText=atob(plain.body.data.replace(/-/g,'+').replace(/_/g,'/'));
+
+      const ok = await mergeParsedIntoStore( scanTextForFields(subject+'\n'+bodyText) );
+      if(ok) imported++;
+    }
+
+    alert(`✅ Qtrado-E-Mails verarbeitet: ${imported}`);
+  }catch(e){
+    alert("❌ Fehler: "+(e.message||e));
+  }
 });
   </script>
 </body>
