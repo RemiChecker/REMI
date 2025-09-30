@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Presse Remi – Abgleich</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0a84ff">
+  <style>
+    :root { --blue:#0a84ff; --muted:#666; --ok:#0a7d2f; --warn:#a02a00; --open:#d48f00; --pruef:#1558d6; --storno:#7b7b7b; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 1rem auto; max-width: 1280px; padding: 0 1rem; }
+    header { display:flex; align-items:center; gap:12px; }
+    h1 { font-size: 1.45rem; margin: .6rem 0; }
+    h2 { margin-top: .6rem; }
+    .muted { color: var(--muted); font-size:.92rem; }
+    .bar { display:flex; gap:.5rem; flex-wrap:wrap; margin:.75rem 0 1rem; }
+    button { padding:.6rem .9rem; border-radius:.6rem; border:1px solid #d0d0d0; background:#f9f9f9; cursor:pointer; }
+    button.primary { background:#0a84ff; color:white; border-color:#0a84ff; }
+    button.ghost { background:white; }
+    textarea { width:100%; min-height: 170px; border-radius:.6rem; border:1px solid #d0d0d0; padding:.7rem; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    input[type=file] { display:none; }
+    .grid { display:grid; grid-template-columns: 1.1fr .9fr; gap:1rem; }
+    @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+    .pill { display:inline-block; padding:.2rem .5rem; border-radius:1rem; background:#eef3ff; color:#0a84ff; font-size:.85rem; }
+    .ok { color:#0a7d2f; }
+    .warn { color:#a02a00; }
+    .section { margin-top: 1.25rem; }
+    .searchbar { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
+    .searchbar input[type="text"] { flex:1; min-width:220px; padding:.55rem .7rem; border:1px solid #d0d0d0; border-radius:.6rem; }
+    .searchbar select, .searchbar input[type="date"] { padding:.55rem .7rem; border:1px solid #d0d0d0; border-radius:.6rem; background:white; }
+    .tabs { display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.5rem; }
+    .tab { padding:.45rem .7rem; border:1px solid #d0d0d0; border-radius:.6rem; cursor:pointer; }
+    .tab.active { background:#0a84ff; color:white; border-color:#0a84ff; }
+    .list { margin-top:.6rem; }
+    .card { border:1px solid #e8e8e8; border-radius:.8rem; padding:.75rem .9rem; margin:.5rem 0; background:white; }
+    details summary { list-style:none; cursor:pointer; }
+    details summary::-webkit-details-marker { display:none; }
+    .row { display:grid; grid-template-columns: 110px 120px 1fr 110px 120px 120px 140px; gap:.6rem; align-items:center; }
+    .row > div { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .chip { display:inline-block; border:1px solid #e0e0e0; border-radius:999px; padding:.15rem .5rem; font-size:.85rem; margin:.1rem .25rem 0 0; }
+    .meta { font-size:.9rem; color:#333; margin-top:.4rem; }
+    .kv { display:grid; grid-template-columns: 160px 1fr 160px 1fr; gap:.35rem .75rem; align-items:start; }
+    .table { width:100%; border-collapse: collapse; margin-top:.5rem; }
+    .table th, .table td { border-bottom:1px solid #f0f0f0; padding:.42rem .2rem; text-align:left; font-size:.95rem; }
+    .note { font-size:.9rem; color:#555; }
+    footer { margin:2rem 0 4rem; color:#666; font-size:.9rem; display:flex; gap:.75rem; align-items:center; flex-wrap:wrap; }
+    .statusDot { width:.6rem; height:.6rem; border-radius:50%; display:inline-block; margin-right:.35rem; background:#9a9a9a; }
+    .status-ok { background: #0a7d2f; }
+    .status-fehlt { background: #a02a00; }
+    .status-offen { background: #d48f00; }
+    .status-geprueft { background: #1558d6; }
+    .status-storniert { background: #7b7b7b; }
+    .totals { display:flex; gap:.75rem; flex-wrap:wrap; align-items:center; padding:.6rem .75rem; border:1px solid #e8e8e8; border-radius:.75rem; background:#fbfbfb; }
+    .totals .badge { padding:.25rem .55rem; border-radius:999px; border:1px solid #e0e0e0; font-size:.9rem; }
+    .right { margin-left:auto; }
+    .help { font-size:.85rem; color:#777; }
+    .controls { display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; }
+    .controls label { display:flex; align-items:center; gap:.4rem; font-size:.92rem; color:#333; }
+    .mini { font-size:.85rem; color:#666; }
+    .dropzone { border:2px dashed #c9d1e6; border-radius:.75rem; padding:1rem; text-align:center; background:#f8faff; }
+    .banner { margin: .75rem 0; padding:.6rem .8rem; border:1px solid #dbe5ff; background:#f4f7ff; border-radius:.6rem; color:#1a3daa; }
+    .toast { position: fixed; top: 12px; right: 12px; z-index: 9999; background: #0a84ff; color: #fff; padding: .55rem .7rem; border-radius: .6rem; box-shadow: 0 6px 18px rgba(0,0,0,.15); font-size: .95rem; display:none; }
+    .version { margin-left:auto; }
+    .settings { border:1px solid #e8e8e8; border-radius:.8rem; padding:.75rem .9rem; background:#fff; }
+    .settings .row { grid-template-columns: 180px 1fr; }
+    .adminOnly { display:none; }
+    .badgeInfo { background:#eef3ff; padding:.2rem .45rem; border-radius:.5rem; border:1px solid #e0e7ff; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.js"></script>
+  <script>pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.min.js";</script>
+  <script async defer src="https://apis.google.com/js/api.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+  <div id="toast" class="toast"></div>
+
+  <header>
+    <img src="icons/icon-192.png" alt="" width="36" height="36">
+    <div>
+      <h1>Presse Remi – Abgleich</h1>
+      <div class="muted">Speichern auf diesem Gerät (IndexedDB). Offline nutzbar.</div>
+      <div class="banner">ℹ️ <strong>Hinweis:</strong> <em>Rechnungen &amp; Remissionen werden nur <u>3&nbsp;Monate</u> intern gespeichert</em>. Ältere Einträge löscht die App automatisch.</div>
+    </div>
+    <div class="right">
+      <button id="forceUpdate" class="ghost">Update erzwingen</button>
+      <span class="version pill">v10 – 29.09.2025</span>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="main">Übersicht</div>
+    <div class="tab" data-tab="settings">Einstellungen</div>
+    <div class="tab adminOnly" data-tab="admin">Admin</div>
+    <div class="tab" data-tab="stats">Statistik</div>
+  </div>
+
+  <div class="grid section" data-view="main">
+    <section>
+      <h2>1) Daten eingeben</h2>
+      <p class="muted">JSON einfügen oder per E-Mail/Datei importieren (EML, PDF). Felder: <code>kundennummer</code> global oder <code>pakete[].kundennummer</code>; plus <code>pakete[].nr, datum, status, rechnungen[], summe, filiale, gewicht, ruecksende_datum, positionen[], differenzen[], notizen</code>.</p>
+      <textarea id="inputArea"></textarea>
+      <div class="bar">
+        <button id="saveBtn" class="primary">Speichern</button>
+        <button id="loadBtn">Laden</button>
+        <button id="clearBtn">Löschen</button>
+      </div>
+      <div class="bar">
+        <button id="exportCsv">Export CSV</button>
+        <button id="exportPdf">Export PDF</button>
+        <button id="exportJson">Export JSON</button>
+        <label><input id="importFile" type="file" accept="application/json,.json"><button id="importBtn">Import aus Datei</button></label>
+      </div>
+      <div class="muted">Schlüssel: <code>presse-remi-v10-USER</code></div>
+    </section>
+
+    <section>
+      <h2>2) E-Mail/Datei Import</h2>
+      <div class="dropzone" id="dropzone">
+        <strong>Datei hierher ziehen</strong> oder
+        <label><input id="filePicker" type="file" multiple accept=".json,.eml,application/pdf"> <button>Datei wählen</button></label>
+        <div class="mini">Unterstützt: JSON (direkt), EML (Rohmail), PDF (Textlese).</div>
+      </div>
+      <div class="bar" style="margin-top:.6rem">
+        <button id="gmailInit">Gmail verbinden (optional)</button>
+        <button id="gmailFetch">E-Mails abrufen</button>
+        <input id="gmailQuery" placeholder='Gmail-Suche, z.B. from:qtrado OR subject:Remission' style="flex:1; min-width:240px; padding:.55rem .7rem; border:1px solid #d0d0d0; border-radius:.6rem;">
+      </div>
+      <div class="controls">
+        <label><input type="checkbox" id="onlyQtrado" checked> Nur Mails von/mit „QTRADO“ verarbeiten</label>
+        <label><input type="checkbox" id="autoDiscard" checked> Nicht-Remi/Rechnung automatisch verwerfen</label>
+      </div>
+      <div class="mini">Gmail läuft nur mit <code>gmail.readonly</code>. Kein Löschen in Gmail – nur <b>lokales</b> Verwerfen/Überspringen.</div>
+      <div class="mini">Benachrichtigungen: <span id="notifStatus" class="badgeInfo">aus</span> <button id="notifEnable" class="ghost">aktivieren</button></div>
+    </section>
+  </div>
+
+  <section class="section" data-view="main">
+    <h2>3) Übersicht</h2>
+    <div class="searchbar">
+      <select id="kdnrSelect"><option value="">Alle Kunden</option></select>
+      <input id="searchInput" type="text" placeholder="Suchen nach Paket-Nr., Rechnung, Datum, Filiale…">
+      <label>Von <input id="dateFrom" type="date"></label>
+      <label>Bis <input id="dateTo" type="date"></label>
+      <button id="toggleMissing" class="ghost">Nur fehlende anzeigen</button>
+      <button id="clearSearch">Leeren</button>
+      <span id="reminderBadge" class="pill" hidden>🔔 Erinnerungen vorhanden</span>
+    </div>
+    <div id="totals" class="totals" hidden>
+      <span class="badge" id="badgeCount">0 Pakete</span>
+      <span class="badge" id="badgeMissing">0 fehlend</span>
+      <span class="badge" id="badgeSum">Summe: –</span>
+      <span class="right help">Zahlen gelten für die aktuelle Filterung.</span>
+    </div>
+    <div id="overview" class="list"></div>
+    <p class="note">Tipp: Tippe auf eine Zeile, um <b>Details</b> (Positionen, Differenzen, Notizen) aufzuklappen.</p>
+  </section>
+
+  <section class="section settings" data-view="settings" style="display:none;">
+    <h2>Einstellungen</h2>
+    <div class="kv" style="grid-template-columns: 220px 1fr 220px 1fr;">
+      <div>Aktueller Nutzer</div>
+      <div>
+        <select id="userSelect"></select>
+        <button id="userAdd" class="ghost">Neu</button>
+        <button id="userDel" class="ghost">Löschen</button>
+      </div>
+      <div>Admin-Rechte</div>
+      <div><label><input type="checkbox" id="userIsAdmin"> ist Admin</label></div>
+
+      <div>Erlaubte Absender 1</div><input id="allowed1" placeholder="z.B. remi@qtrado.de">
+      <div>Erlaubte Absender 2</div><input id="allowed2" placeholder="optional">
+      <div>Erlaubte Absender 3</div><input id="allowed3" placeholder="optional">
+      <div>Speichern</div><button id="settingsSave" class="primary">Speichern</button>
+    </div>
+    <p class="mini">Nur E-Mails von den hier eingetragenen Adressen werden berücksichtigt (zusätzlich zu QTRADO-Check, wenn aktiviert).</p>
+  </section>
+
+  <section class="section" data-view="admin" style="display:none;">
+    <h2>Admin-Übersicht</h2>
+    <div id="adminSummary" class="list"></div>
+  </section>
+
+  <section class="section" data-view="stats" style="display:none;">
+    <h2>Statistik</h2>
+    <div id="statsBox" class="totals"></div>
+    <p class="mini">Artikel geprüft = Summe der Positionen über alle Pakete. Fehler = Differenzen + fehlende Pakete.</p>
+  </section>
+
+  <footer>
+    <span class="pill">PWA</span> <span class="muted">Zum Home-Bildschirm hinzufügen – funktioniert offline.</span>
+    <div id="log" class="muted" style="margin-top:.5rem;"></div>
+  </footer>
+
+  <script type="module">
+    import { get, set, del } from "https://cdn.jsdelivr.net/npm/idb-keyval@6/+esm";
+    const GOOGLE_CLIENT_ID = "HIER_DEINE_CLIENT_ID.apps.googleusercontent.com";
+    const GMAIL_SCOPES = "https://www.googleapis.com/auth/gmail.readonly";
+    const LS_USERS = 'presse-remi-users-v10';
+    let users = JSON.parse(localStorage.getItem(LS_USERS) || '[]');
+    if (!users.length) { users = [{id: 'user-1', name: 'Standard', isAdmin: true, allowedEmails: [], createdAt: Date.now()}]; localStorage.setItem(LS_USERS, JSON.stringify(users)); }
+    let currentUserId = localStorage.getItem('presse-remi-current-user') || users[0].id;
+    const KEY = (uid) => `presse-remi-daten-v10-${uid}`;
+
+    const tabs = Array.from(document.querySelectorAll('.tab'));
+    const views = Array.from(document.querySelectorAll('[data-view]'));
+    const inputArea = document.getElementById('inputArea');
+    const overview = document.getElementById('overview');
+    const totals = document.getElementById('totals');
+    const badgeCount = document.getElementById('badgeCount');
+    const badgeMissing = document.getElementById('badgeMissing');
+    const badgeSum = document.getElementById('badgeSum');
+    const searchInput = document.getElementById('searchInput');
+    const clearSearchBtn = document.getElementById('clearSearch');
+    const toggleMissingBtn = document.getElementById('toggleMissing');
+    const kdnrSelect = document.getElementById('kdnrSelect');
+    const dateFrom = document.getElementById('dateFrom');
+    const dateTo = document.getElementById('dateTo');
+    const dropzone = document.getElementById('dropzone');
+    const filePicker = document.getElementById('filePicker');
+    const importFile = document.getElementById('importFile');
+    const gmailInitBtn = document.getElementById('gmailInit');
+    const gmailFetchBtn = document.getElementById('gmailFetch');
+    const gmailQuery = document.getElementById('gmailQuery');
+    const onlyQtrado = document.getElementById('onlyQtrado');
+    const autoDiscard = document.getElementById('autoDiscard');
+    const toast = document.getElementById('toast');
+    const log = document.getElementById('log');
+    const notifStatus = document.getElementById('notifStatus');
+    const notifEnable = document.getElementById('notifEnable');
+    const reminderBadge = document.getElementById('reminderBadge');
+
+    const userSelect = document.getElementById('userSelect');
+    const userAdd = document.getElementById('userAdd');
+    const userDel = document.getElementById('userDel');
+    const userIsAdmin = document.getElementById('userIsAdmin');
+    const allowed1 = document.getElementById('allowed1');
+    const allowed2 = document.getElementById('allowed2');
+    const allowed3 = document.getElementById('allowed3');
+    const settingsSave = document.getElementById('settingsSave');
+    const adminTab = document.querySelector('.tab[data-tab="admin"]');
+    const adminSummary = document.getElementById('adminSummary');
+    const statsBox = document.getElementById('statsBox');
+
+    let onlyMissing = false;
+    let googleInited = false;
+
+    function userById(id){ return users.find(u => u.id === id); }
+    function fmtEuro(n){ return (typeof n === 'number') ? new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(n) : ''; }
+    function statusDot(status){
+      const map = { ok:'status-ok', fehlt:'status-fehlt', offen:'status-offen', geprueft:'status-geprueft', geprüft:'status-geprueft', storniert:'status-storniert' };
+      const cls = map[(status||'').toLowerCase()] || '';
+      return '<span class="statusDot '+cls+'"></span>';
+    }
+    function norm(s){ return (s||'').toString().toLowerCase(); }
+    function getKdnrForPaket(p, globalKdnr){ return p.kundennummer || globalKdnr || ''; }
+    function parseDateAny(s){
+      if (!s) return null;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(s+'T00:00:00');
+      const m = s.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+      if (m) return new Date(`${m[3]}-${m[2]}-${m[1]}T00:00:00`);
+      return null;
+    }
+    function dateInRange(d, fromStr, toStr){
+      if (!d) return false;
+      const from = fromStr ? new Date(fromStr+'T00:00:00') : null;
+      const to = toStr ? new Date(toStr+'T23:59:59') : null;
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    }
+    function threeMonthsAgo(){ const d = new Date(); d.setMonth(d.getMonth() - 3); d.setHours(0,0,0,0); return d; }
+    function sevenDaysAgo(){ const d = new Date(); d.setDate(d.getDate() - 7); d.setHours(0,0,0,0); return d; }
+    function showToast(msg){ toast.textContent = msg; toast.style.display = 'block'; setTimeout(() => { toast.style.display = 'none'; }, 4000); }
+    function logLine(msg){ const time = new Date().toLocaleString('de-DE'); log.innerHTML = `<div>• ${time}: ${msg}</div>` + log.innerHTML; }
+
+    function pruneOld(data){
+      const before = (data.pakete || []).length;
+      const cutoff = threeMonthsAgo();
+      const keep = [];
+      for (const p of (data.pakete || [])){
+        const d = parseDateAny(p.datum);
+        if (!d || d < cutoff) continue;
+        keep.push(p);
+      }
+      data.pakete = keep;
+      const removed = before - keep.length;
+      if (removed > 0){
+        showToast(`Aufgeräumt: ${removed} Eintrag${removed===1?'':'e'} älter als 3 Monate entfernt`);
+        logLine(`Aufgeräumt: ${removed} Einträge entfernt (älter als 3 Monate)`);
+      }
+      return data;
+    }
+
+    function collectKdnrs(data){
+      const set = new Set();
+      if (data?.kundennummer) set.add(String(data.kundennummer));
+      (data?.pakete || []).forEach(p => { const k = getKdnrForPaket(p, data?.kundennummer); if (k) set.add(String(k)); });
+      return Array.from(set).sort();
+    }
+
+    function computeStats(data){
+      const list = data?.pakete || [];
+      const artikel = list.reduce((acc,p) => acc + (p.positionen?.reduce((a,x)=>a + (x.menge||0),0) || 0), 0);
+      const diffs = list.reduce((acc,p) => acc + (p.differenzen?.length || 0), 0);
+      const fehlt = list.filter(p => norm(p.status) === 'fehlt').length;
+      return { artikel, fehler: diffs + fehlt, pakete: list.length, fehlt };
+    }
+
+    function missingOlderThan7Days(list){
+      const cutoff = sevenDaysAgo();
+      return list.filter(p => norm(p.status) === 'fehlt' && parseDateAny(p.datum) && parseDateAny(p.datum) < cutoff);
+    }
+
+    function allowedEmailMatch(headersText){
+      const u = userById(currentUserId);
+      const allowed = (u?.allowedEmails || []).filter(Boolean).map(x => x.toLowerCase());
+      if (!allowed.length) return true;
+      const m = headersText.match(/^From:\s*(.*)$/mi);
+      const from = (m?.[1] || '').toLowerCase();
+      return allowed.some(a => from.includes(a));
+    }
+
+    async function readStore(){ return (await get(KEY(currentUserId))) ?? { kundennummer:'', pakete:[], _meta:{}}; }
+    async function writeStore(obj){ await set(KEY(currentUserId), obj); }
+
+    function setTab(name){
+      tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+      views.forEach(v => v.style.display = (v.dataset.view === name || v.dataset.view === 'main' && name === 'main') ? '' : (v.dataset.view ? (v.dataset.view===name?'':'none') : ''));
+      document.querySelectorAll('[data-view="main"]').forEach(v => v.style.display = (name==='main'?'':'none'));
+    }
+    tabs.forEach(t => t.addEventListener('click', () => setTab(t.dataset.tab)));
+
+    function statusDotHtml(status){ return status ? `${statusDot(status)} ${status}` : ''; }
+    function rowSummary(p, kundennummer){
+      const rechnungen = (p.rechnungen ?? []).map(r => `<span class="chip">RG ${r}</span>`).join('');
+      return `
+        <div class="row">
+          <div><strong>Paket ${p.nr ?? ''}</strong></div>
+          <div class="muted">${p.datum ?? ''}</div>
+          <div>${rechnungen || '<span class="muted">–</span>'}</div>
+          <div class="muted">${statusDotHtml(p.status)}</div>
+          <div>${p.filiale ?? ''}</div>
+          <div class="muted">${p.gewicht ?? ''}</div>
+          <div class="muted">${p.ruecksende_datum ?? ''}</div>
+        </div>
+        <div class="meta">
+          <div class="kv">
+            <div>Kundennummer</div><div>${kundennummer ?? ''}</div>
+            <div>Summe</div><div>${(typeof p.summe === 'number') ? fmtEuro(p.summe) : '–'}</div>
+          </div>
+        </div>`;
+    }
+    function tablePositions(positions){
+      if (!positions?.length) return '<p class="muted">Keine Positionen.</p>';
+      const rows = positions.map(x => `<tr><td>${x.ean ?? ''}</td><td>${x.titel ?? ''}</td><td>${x.menge ?? ''}</td><td>${fmtEuro(x.pries)||''}</td><td>${fmtEuro((x.menge||0)*(x.preis||0))}</td></tr>`).join('');
+      return `<table class="table"><thead><tr><th>EAN</th><th>Titel</th><th>Menge</th><th>Preis</th><th>Zw.</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+    function tableDiffs(diffs){
+      if (!diffs?.length) return '<p class="muted">Keine Differenzen.</p>';
+      const rows = diffs.map(x => `<tr><td>${x.ean ?? ''}</td><td>${x.titel ?? ''}</td><td>${x.erwartet ?? ''}</td><td>${x.ist ?? ''}</td></tr>`).join('');
+      return `<table class="table"><thead><tr><th>EAN</th><th>Titel</th><th>Erwartet</th><th>Ist</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+    function computeTotals(list){
+      const count = list.length;
+      const missing = list.filter(p => norm(p.status) === 'fehlt').length;
+      const sum = list.reduce((acc,p) => acc + (typeof p.summe === 'number' ? p.summe : 0), 0);
+      badgeCount.textContent = count + (count === 1 ? ' Paket' : ' Pakete');
+      badgeMissing.textContent = missing + ' fehlend';
+      badgeSum.textContent = 'Summe: ' + (count ? new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(sum) : '–');
+      totals.hidden = false;
+    }
+    function render(data){
+      const globalKdnr = data?.kundennummer ?? '';
+      const listAll = (data?.pakete ?? []).map(p => ({...p, _kdnr: getKdnrForPaket(p, globalKdnr)}));
+      const q = norm(searchInput.value).trim();
+      const selectedKdnr = kdnrSelect.value;
+      const from = dateFrom.value;
+      const to = dateTo.value;
+
+      let list = listAll.filter(p => {
+        const matchKdnr = !selectedKdnr || p._kdnr === selectedKdnr;
+        const matchQ = !q || [
+          norm(p.nr), norm(p.datum), norm(p.filiale), norm(p.gewicht), norm(p.ruecksende_datum),
+          ...(p.rechnungen||[]).map(r => norm(r)), norm(p._kdnr)
+        ].some(v => v.includes(q));
+        const matchMissing = !onlyMissing || norm(p.status) === 'fehlt';
+        const d = parseDateAny(p.datum);
+        const matchDate = (!from && !to) ? true : dateInRange(d, from, to);
+        return matchKdnr && matchQ && matchMissing && matchDate;
+      });
+
+      const over7 = missingOlderThan7Days(listAll);
+      reminderBadge.hidden = over7.length === 0;
+      if (over7.length) {
+        notify(`Es gibt ${over7.length} Paket(e), die seit > 7 Tagen fehlen.`);
+      }
+
+      if (!list.length) { overview.innerHTML = '<div class="muted">Keine Treffer…</div>'; computeTotals([]); drawStats(data); return; }
+      computeTotals(list);
+      overview.innerHTML = list.map(p => `
+        <details class="card">
+          <summary>${rowSummary(p, p._kdnr)}</summary>
+          <div class="section"><h3>Positionen</h3>${tablePositions(p.positionen)}</div>
+          <div class="section"><h3>Differenzen</h3>${tableDiffs(p.differenzen)}</div>
+          ${p.notizen ? `<div class="section"><h3>Notizen</h3><p>${p.notizen}</p></div>` : ''}
+        </details>
+      `).join('');
+      drawStats(data);
+    }
+
+    function drawStats(data){
+      const s = computeStats(data);
+      statsBox.innerHTML = `
+        <span class="badge">Pakete: ${s.pakete}</span>
+        <span class="badge">Artikel geprüft: ${s.artikel}</span>
+        <span class="badge ${s.fehler? 'warn':''}">Fehler: ${s.fehler}</span>
+        <span class="badge">Fehlend: ${s.fehlt}</span>
+      `;
+    }
+
+    document.getElementById('exportJson').addEventListener('click', async () => {
+      const d = await readStore();
+      const blob = new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
+      const url = URL.createObjectURL(blob); const a = document.createElement('a');
+      a.href = url; a.download = 'presse-remi-backup.json'; a.click(); URL.revokeObjectURL(url);
+      showToast('Exportiert (JSON) ✅');
+    });
+
+    document.getElementById('exportCsv').addEventListener('click', async () => {
+      const d = await readStore();
+      const rows = [['Kundennummer','Paket','Datum','Status','Rechnungen','Summe','Filiale','Gewicht','Ruecksende']];
+      (d.pakete||[]).forEach(p => {
+        rows.push([getKdnrForPaket(p,d.kundennummer), p.nr||'', p.datum||'', p.status||'', (p.rechnungen||[]).join(' '), p.summe||'', p.filiale||'', p.gewicht||'', p.ruecksende_datum||'']);
+      });
+      const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(';')).join('
+');
+      const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+      const url = URL.createObjectURL(blob); const a = document.createElement('a');
+      a.href = url; a.download = 'presse-remi.csv'; a.click(); URL.revokeObjectURL(url);
+      showToast('Exportiert (CSV) ✅');
+    });
+
+    document.getElementById('exportPdf').addEventListener('click', async () => {
+      const d = await readStore();
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      const s = computeStats(d);
+      doc.setFontSize(14); doc.text('Presse Remi – Übersicht', 14, 16);
+      doc.setFontSize(10); doc.text(`Pakete: ${s.pakete} | Artikel geprüft: ${s.artikel} | Fehler: ${s.fehler}`, 14, 22);
+      const body = (d.pakete||[]).map(p => [getKdnrForPaket(p,d.kundennummer), p.nr||'', p.datum||'', p.status||'', (p.rechnungen||[]).join(' '), p.summe||'']);
+      doc.autoTable({ head:[['Kdnr','Paket','Datum','Status','Rechnungen','Summe']], body, startY: 28, styles:{fontSize:9} });
+      doc.save('presse-remi.pdf');
+      showToast('Exportiert (PDF) ✅');
+    });
+
+    document.getElementById('saveBtn').addEventListener('click', async () => { 
+      try{ let obj = JSON.parse(inputArea.value||'{}'); obj = pruneOld(obj||{kundennummer:'',pakete:[]}); await writeStore(obj); showToast('Gespeichert ✅'); fillKdnrDropdown(collectKdnrs(obj)); render(obj);} 
+      catch(e){ showToast('JSON-Fehler: '+e.message); } 
+    });
+    document.getElementById('loadBtn').addEventListener('click', async () => { 
+      let d=await readStore(); d = pruneOld(d||{kundennummer:'',pakete:[]}); await writeStore(d); inputArea.value=JSON.stringify(d,null,2); fillKdnrDropdown(collectKdnrs(d)); render(d); 
+    });
+    document.getElementById('clearBtn').addEventListener('click', async () => { await del(KEY(currentUserId)); inputArea.value=''; render({}); showToast('Gelöscht ✅'); });
+
+    function highlight(e){ e.preventDefault(); e.currentTarget.style.background = '#eef3ff'; }
+    function unhighlight(e){ e.preventDefault(); e.currentTarget.style.background = '#f8faff'; }
+    dropzone.addEventListener('dragover', highlight);
+    dropzone.addEventListener('dragenter', highlight);
+    dropzone.addEventListener('dragleave', unhighlight);
+    dropzone.addEventListener('drop', async (e) => {
+      e.preventDefault(); unhighlight(e);
+      const files = Array.from(e.dataTransfer.files);
+      for (const file of files) await handleFile(file);
+    });
+    filePicker.addEventListener('change', async (e) => {
+      for (const file of Array.from(e.target.files)) await handleFile(file);
+      filePicker.value = '';
+    });
+
+    document.getElementById('importBtn').addEventListener('click', () => importFile.click());
+    importFile.addEventListener('change', async (e) => { const file=e.target.files?.[0]; if(!file) return; const text=await file.text(); let obj=JSON.parse(text); await writeStore(obj); showToast('Importiert ✅'); render(obj); e.target.value=''; });
+
+    async function handleFile(file){
+      const name = file.name.toLowerCase();
+      if (name.endsWith('.json')) return importJSON(file);
+      if (name.endsWith('.eml')) return importEML(file);
+      if (name.endsWith('.pdf')) return importPDF(file);
+      showToast('Nicht unterstützter Dateityp: ' + file.name);
+    }
+    async function importJSON(file){ const text = await file.text(); let obj = JSON.parse(text); await writeStore(obj); render(obj); showToast('Importiert ✅'); }
+
+    function extractHeader(raw, headerName){ const re = new RegExp('^'+headerName+':\s*(.*)$','im'); return (raw.match(re)||[])[1] || ''; }
+    function extractTextFromEML(raw){
+      const boundaryMatch = raw.match(/boundary="([^"]+)"/i);
+      if (boundaryMatch){
+        const boundary = '--' + boundaryMatch[1];
+        const parts = raw.split(boundary);
+        for (const p of parts){
+          if (/Content-Type:\s*text\/plain/i.test(p)){
+            let content = p.split(/?
+?
+/).slice(1).join('
+
+');
+            content = content.replace(/--\s*$/, '');
+            return decodeQuotedPrintable(content);
+          }
+        }
+      }
+      const split = raw.split(/?
+?
+/);
+      return split.slice(1).join('
+');
+    }
+    function decodeQuotedPrintable(str){ return str.replace(/=([A-F0-9]{2})/gi, (m, hex) => String.fromCharCode(parseInt(hex,16))); }
+
+    function looksLikeRelevant(text, requireQtrado){
+      const t = norm(text);
+      if (requireQtrado && !/qtrado/i.test(text)) return false;
+      const cues = ['remission','remissionen','gutschrift','rechnung','rg','retoure','rücksend','paketnr','paket-nr','paket nummer'];
+      const foundCue = cues.some(c => t.includes(c));
+      const hasPaket = /paket(?:nr|nummer)?\s*[-: ]\s*[0-9]{3,}/i.test(text) || /Paket\s*[0-9]{3,}/i.test(text);
+      const hasRe = /(?:rechnung(?:s)?nr|rg|rechnungsnummer)\s*[-: ]\s*([0-9]{5,})/i.test(text);
+      return foundCue || hasPaket || hasRe;
+    }
+    function scanTextForFields(t){
+      const paket = (t.match(/paket(?:nr|nummer)?\s*[-: ]\s*([0-9]{3,})/i) || t.match(/Paket\s*([0-9]{3,})/i))?.[1];
+      const kdnr = (t.match(/kunden(?:nr|nummer)?\s*[-: ]\s*([0-9]{3,})/i) || t.match(/Kdnr\.?\s*([0-9]{3,})/i))?.[1];
+      const re = Array.from(t.matchAll(/(?:rechnung(?:s)?nr|rg|rechnungsnummer)\s*[-: ]\s*([0-9]{5,})/ig)).map(m => m[1]);
+      const dateIso = (t.match(/(20[2-5][0-9]-[01][0-9]-[0-3][0-9])/))?.[1];
+      const dateDe = (t.match(/([0-3][0-9]\.[01][0-9]\.20[2-5][0-9])/))?.[1];
+      const datum = dateIso || (dateDe ? dateDe.split('.').reverse().join('-') : '');
+      return { paket, kdnr, rechnungen: re, datum };
+    }
+
+    async function mergeParsedIntoStore(parsed){
+      if (!parsed.paket && !parsed.rechnungen?.length && !parsed.kdnr) return false;
+      let data = await readStore();
+      if (parsed.kdnr && !data.kundennummer) data.kundennummer = parsed.kdnr;
+      let p = parsed.paket ? data.pakete.find(x => x.nr === parsed.paket) : null;
+      if (!p){
+        p = { nr: parsed.paket || 'unbekannt', datum: parsed.datum || '', status: 'offen', rechnungen: [], positionen: [], differenzen: [] };
+        data.pakete.push(p);
+      }
+      if (parsed.kdnr) p.kundennummer = parsed.kdnr;
+      if (parsed.datum && !p.datum) p.datum = parsed.datum;
+      if (parsed.rechnungen?.length){
+        const setRe = new Set([...(p.rechnungen||[]), ...parsed.rechnungen]);
+        p.rechnungen = Array.from(setRe);
+      }
+      data = pruneOld(data);
+      await writeStore(data);
+      inputArea.value = JSON.stringify(data, null, 2);
+      fillKdnrDropdown(collectKdnrs(data));
+      render(data);
+      return true;
+    }
+
+    async function importEML(file){
+      const raw = await file.text();
+      const headers = raw.split(/\r?\n\r?\n/)[0] || '';
+      if (!allowedEmailMatch(headers)) { logLine(`Verworfen (Absender nicht erlaubt): ${file.name}`); return; }
+      const body = extractTextFromEML(raw);
+      const allText = headers + '\n' + body + '\n' + file.name;
+      if (autoDiscard.checked && !looksLikeRelevant(allText, onlyQtrado.checked)) { logLine(`Verworfen (EML): ${file.name}`); return; }
+      const parsed = scanTextForFields(allText);
+      const merged = await mergeParsedIntoStore(parsed);
+      if (merged) { showToast('E-Mail importiert ✅ ' + file.name); notify('Neue Remi/RE-Daten importiert.'); }
+      else if (!autoDiscard.checked) showToast('Keine relevanten Daten: ' + file.name);
+    }
+
+    async function importPDF(file){
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+      let text = '';
+      for (let i=1; i<=pdf.numPages; i++){
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        text += content.items.map(it => it.str).join(' ') + '\n';
+      }
+      const allText = text + '\n' + file.name;
+      if (autoDiscard.checked && !looksLikeRelevant(allText, onlyQtrado.checked)) { logLine(`Verworfen (PDF): ${file.name}`); return; }
+      const parsed = scanTextForFields(allText);
+      const merged = await mergeParsedIntoStore(parsed);
+      if (merged) { showToast('PDF importiert ✅ ' + file.name); notify('Neue Remi/RE-Daten importiert.'); }
+      else if (!autoDiscard.checked) showToast('Keine relevanten Daten: ' + file.name);
+    }
+
+    document.getElementById('gmailInit').addEventListener('click', async () => {
+      if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith('HIER_')) { showToast('Bitte zuerst GOOGLE_CLIENT_ID setzen'); return; }
+      await new Promise(r => gapi.load('client:auth2', r));
+      await gapi.client.init({ clientId: GOOGLE_CLIENT_ID, scope: GMAIL_SCOPES, discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest'] });
+      if (!(await gapi.auth2.getAuthInstance().isSignedIn.get())){ await gapi.auth2.getAuthInstance().signIn(); }
+      googleInited = true;
+      showToast('Gmail verbunden ✅');
+    });
+
+    document.getElementById('gmailFetch').addEventListener('click', async () => {
+      if (!googleInited) { showToast('Bitte zuerst mit Gmail verbinden'); return; }
+      let q = gmailQuery.value || '';
+      const allowed = (userById(currentUserId)?.allowedEmails || []).filter(Boolean);
+      if (allowed.length){
+        const parts = allowed.map(a => `from:${a}`);
+        q = q ? `${q} (${parts.join(' OR ')})` : `(${parts.join(' OR ')})`;
+      }
+      if (onlyQtrado.checked) { q = q ? `(${q}) (from:qtrado OR subject:qtrado)` : '(from:qtrado OR subject:qtrado)'; }
+      if (!q) q = 'from:qtrado OR subject:qtrado';
+      const resp = await gapi.client.gmail.users.messages.list({ userId: 'me', q, maxResults: 30 });
+      const ids = (resp.result.messages || []).map(m => m.id);
+      let imported = 0, skipped = 0;
+      for (const id of ids){
+        const msg = await gapi.client.gmail.users.messages.get({ userId: 'me', id, format: 'full' });
+        const headers = (msg.result.payload.headers || []).map(h=>`${h.name}: ${h.value}`).join('\n');
+        if (!allowedEmailMatch(headers)) { skipped++; continue; }
+        const fullText = gmailMessageToFullText(msg.result);
+        if (autoDiscard.checked && !looksLikeRelevant(fullText, onlyQtrado.checked)) { skipped++; continue; }
+        const parsed = scanTextForFields(fullText);
+        const ok = await mergeParsedIntoStore(parsed);
+        if (ok) imported++; else skipped++;
+      }
+      const data = await readStore();
+      await writeStore(data);
+      showToast(`Gmail: ${imported} importiert, ${skipped} übersprungen`);
+      if (imported) notify(`${imported} Mail(s) importiert`);
+    });
+
+    function gmailMessageToFullText(message){
+      function b64ToUtf8(str){ return decodeURIComponent(escape(atob(str.replace(/-/g,'+').replace(/_/g,'/')))); }
+      function headersToText(headers){ return headers.map(h => `${h.name}: ${h.value}`).join('\n'); }
+      function walk(part){
+        if (!part) return '';
+        if (part.body && part.body.data) return b64ToUtf8(part.body.data);
+        if (part.parts) return part.parts.map(walk).join('\n');
+        return '';
+      }
+      const headers = headersToText(message.payload.headers || []);
+      const body = walk(message.payload);
+      return headers + '\n' + body;
+    }
+
+    function updateNotifUi(){
+      notifStatus.textContent = (Notification && Notification.permission === 'granted') ? 'an' : 'aus';
+    }
+    function notify(msg){
+      showToast(msg);
+      if (!('Notification' in window)) return;
+      if (Notification.permission === 'granted'){ new Notification('Presse Remi', { body: msg }); }
+    }
+    notifEnable.addEventListener('click', async () => {
+      if (!('Notification' in window)) { showToast('Benachrichtigungen nicht unterstützt'); return; }
+      const p = await Notification.requestPermission();
+      updateNotifUi();
+      if (p === 'granted') showToast('Benachrichtigungen aktiviert ✅');
+    });
+
+    searchInput.addEventListener('input', async () => render(await readStore()));
+    [dateFrom, dateTo].forEach(el => el.addEventListener('change', async () => render(await readStore())));
+    clearSearchBtn.addEventListener('click', async () => { searchInput.value=''; dateFrom.value=''; dateTo.value=''; render(await readStore()); });
+    toggleMissingBtn.addEventListener('click', async () => { onlyMissing = !onlyMissing; toggleMissingBtn.textContent = onlyMissing ? 'Alle anzeigen' : 'Nur fehlende anzeigen'; render(await readStore()); });
+
+    function refreshUserUi(){
+      userSelect.innerHTML = users.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
+      userSelect.value = currentUserId;
+      const u = userById(currentUserId);
+      userIsAdmin.checked = !!u?.isAdmin;
+      allowed1.value = u?.allowedEmails?.[0] || '';
+      allowed2.value = u?.allowedEmails?.[1] || '';
+      allowed3.value = u?.allowedEmails?.[2] || '';
+      adminTab.style.display = u?.isAdmin ? '' : 'none';
+      document.querySelectorAll('.adminOnly').forEach(el => el.style.display = u?.isAdmin ? '' : 'none');
+    }
+    userSelect.addEventListener('change', async () => {
+      currentUserId = userSelect.value; localStorage.setItem('presse-remi-current-user', currentUserId);
+      const d = await readStore();
+      inputArea.value = JSON.stringify(d, null, 2);
+      fillKdnrDropdown(collectKdnrs(d));
+      render(d);
+    });
+    userAdd.addEventListener('click', async () => {
+      const name = prompt('Name des neuen Nutzers?'); if (!name) return;
+      const id = 'user-' + Math.random().toString(36).slice(2, 8);
+      users.push({id, name, isAdmin:false, allowedEmails:[], createdAt: Date.now()});
+      localStorage.setItem(LS_USERS, JSON.stringify(users));
+      currentUserId = id; localStorage.setItem('presse-remi-current-user', currentUserId);
+      refreshUserUi();
+      await writeStore({kundennummer:'', pakete:[], _meta:{}});
+      render(await readStore());
+    });
+    userDel.addEventListener('click', async () => {
+      if (!confirm('Diesen Nutzer und seine lokalen Daten löschen?')) return;
+      await del(KEY(currentUserId));
+      users = users.filter(u => u.id !== currentUserId);
+      if (!users.length){ users = [{id:'user-1', name:'Standard', isAdmin:true, allowedEmails:[], createdAt:Date.now()}]; }
+      localStorage.setItem(LS_USERS, JSON.stringify(users));
+      currentUserId = users[0].id; localStorage.setItem('presse-remi-current-user', currentUserId);
+      refreshUserUi();
+      render(await readStore());
+    });
+    settingsSave.addEventListener('click', () => {
+      const u = userById(currentUserId); if (!u) return;
+      u.isAdmin = !!userIsAdmin.checked;
+      u.allowedEmails = [allowed1.value.trim(), allowed2.value.trim(), allowed3.value.trim()].filter(Boolean).slice(0,3);
+      localStorage.setItem(LS_USERS, JSON.stringify(users));
+      refreshUserUi();
+      showToast('Einstellungen gespeichert ✅');
+    });
+
+    async function renderAdmin(){
+      const items = await Promise.all(users.map(async u => {
+        const d = (await get(KEY(u.id))) ?? {kundennummer:'', pakete:[]};
+        const s = computeStats(d);
+        return `<div class="card"><strong>${u.name}</strong> ${u.isAdmin?'<span class="pill">Admin</span>':''}<br>
+          <span class="mini">Pakete: ${s.pakete} | Artikel geprüft: ${s.artikel} | Fehler: ${s.fehler} | Fehlend: ${s.fehlt}</span></div>`;
+      }));
+      adminSummary.innerHTML = items.join('');
+    }
+
+    document.getElementById('forceUpdate').addEventListener('click', async () => {
+      try{
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const reg of regs) { await reg.unregister(); }
+        }
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.filter(k => k.startsWith('presse-remi-cache-')).map(k => caches.delete(k)));
+        }
+        showToast('Update erzwungen – lade neu…');
+        setTimeout(() => location.reload(true), 800);
+      }catch(e){ showToast('Update-Fehler: '+e.message); }
+    });
+
+    function fillKdnrDropdown(kdnrs){
+      const current = kdnrSelect.value;
+      kdnrSelect.innerHTML = '<option value="">Alle Kunden</option>' + kdnrs.map(k => `<option value="${k}">${k}</option>`).join('');
+      if (current && kdnrs.includes(current)) kdnrSelect.value = current;
+    }
+
+    function updateViewsByTab(){
+      const active = document.querySelector('.tab.active')?.dataset.tab || 'main';
+      setTab(active);
+    }
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js'));
+    }
+
+    (async () => {
+      updateNotifUi();
+      refreshUserUi();
+      const d = await readStore();
+      const cleaned = pruneOld(d||{kundennummer:'',pakete:[]});
+      await writeStore(cleaned);
+      inputArea.value = JSON.stringify(cleaned, null, 2);
+      fillKdnrDropdown(collectKdnrs(cleaned));
+      render(cleaned);
+      updateViewsByTab();
+      renderAdmin();
+      logLine('Hinweis: Rechnungen/Remis werden nur 3 Monate intern gespeichert.');
+    })();
+
+    function gmailMessageToFullText(message){
+      function b64ToUtf8(str){ return decodeURIComponent(escape(atob(str.replace(/-/g,'+').replace(/_/g,'/')))); }
+      function headersToText(headers){ return headers.map(h => `${h.name}: ${h.value}`).join('\n'); }
+      function walk(part){
+        if (!part) return '';
+        if (part.body && part.body.data) return b64ToUtf8(part.body.data);
+        if (part.parts) return part.parts.map(walk).join('\n');
+        return '';
+      }
+      const headers = headersToText(message.payload.headers || []);
+      const body = walk(message.payload);
+      return headers + '\n' + body;
+    }
+  </script>
+</body>
+</html>
