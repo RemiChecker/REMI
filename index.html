@@ -1,3 +1,23 @@
+<script>
+/* ===== Einmal radikal aufräumen – direkt bei Seitenaufruf ===== */
+(async () => {
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const reg of regs) {
+        // Alle SWs abmelden, egal von welchem Pfad
+        await reg.unregister();
+      }
+    }
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+  } catch (e) {
+    console.warn('Auto-Clean Fehlermeldung:', e);
+  }
+})();
+</script>
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -9,27 +29,32 @@
   <title>Presse Remi – Abgleich</title>
   <meta name="theme-color" content="#0a84ff">
 
+  <!-- Styles (kompakt) -->
   <style>
-    :root { --blue:#0a84ff; --muted:#666; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 1rem auto; max-width: 1100px; padding: 0 1rem; }
-    header { display:flex; align-items:center; gap:12px; }
-    h1 { font-size:1.4rem; margin:.6rem 0; }
-    .pill { display:inline-block; padding:.2rem .5rem; border-radius:1rem; background:#eef3ff; color:#0a84ff; font-size:.85rem; }
-    .muted { color:var(--muted); font-size:.92rem; }
-    .banner { margin:.75rem 0; padding:.6rem .8rem; border:1px solid #dbe5ff; background:#f4f7ff; border-radius:.6rem; color:#1a3daa; }
-    .tabs { display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.5rem; }
-    .tab { padding:.45rem .7rem; border:1px solid #d0d0d0; border-radius:.6rem; cursor:pointer; }
-    .tab.active { background:#0a84ff; color:white; border-color:#0a84ff; }
-    .toast { position:fixed; top:12px; right:12px; z-index:9999; background:#0a84ff; color:#fff; padding:.55rem .7rem; border-radius:.6rem; display:none; }
-    .list { margin-top:.6rem; }
-    .card { border:1px solid #e8e8e8; border-radius:.8rem; padding:.75rem .9rem; margin:.5rem 0; background:white; }
-    button { padding:.55rem .85rem; border-radius:.6rem; border:1px solid #d0d0d0; cursor:pointer; }
-    button.primary { background:#0a84ff; color:#fff; border-color:#0a84ff; }
-    textarea { width:100%; min-height:160px; border:1px solid #d0d0d0; border-radius:.6rem; padding:.6rem; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    input[type="date"], input[type="text"] { padding:.5rem .65rem; border:1px solid #d0d0d0; border-radius:.6rem; }
+    :root { --blue:#0a84ff; --muted:#666; --ok:#0a7d2f; --warn:#a02a00; }
+    *{box-sizing:border-box} body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:1rem auto;max-width:1150px;padding:0 1rem}
+    header{display:flex;gap:12px;align-items:center} h1{font-size:1.4rem;margin:.5rem 0}
+    .muted{color:var(--muted);font-size:.92rem}
+    .tabs{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem}
+    .tab{padding:.45rem .7rem;border:1px solid #d0d0d0;border-radius:.6rem;cursor:pointer}
+    .tab.active{background:#0a84ff;color:#fff;border-color:#0a84ff}
+    .banner{margin:.75rem 0;padding:.6rem .8rem;border:1px solid #dbe5ff;background:#f4f7ff;border-radius:.6rem;color:#1a3daa}
+    .pill{display:inline-block;padding:.2rem .5rem;border-radius:1rem;background:#eef3ff;color:#0a84ff;font-size:.85rem}
+    button{padding:.55rem .85rem;border-radius:.6rem;border:1px solid #d0d0d0;cursor:pointer;background:#fff}
+    button.primary{background:#0a84ff;color:#fff;border-color:#0a84ff}
+    textarea{width:100%;min-height:160px;border:1px solid #d0d0d0;border-radius:.6rem;padding:.6rem;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    input[type="text"],input[type="date"],select{padding:.5rem .65rem;border:1px solid #d0d0d0;border-radius:.6rem}
+    .list{margin-top:.6rem}
+    .card{border:1px solid #e8e8e8;border-radius:.8rem;padding:.75rem .9rem;margin:.5rem 0;background:#fff}
+    details summary{list-style:none;cursor:pointer} details summary::-webkit-details-marker{display:none}
+    .row{display:grid;grid-template-columns:120px 120px 1fr 120px;gap:.6rem;align-items:center}
+    .chip{display:inline-block;border:1px solid #e0e0e0;border-radius:999px;padding:.15rem .5rem;font-size:.85rem;margin:.1rem .25rem 0 0}
+    .toast{position:fixed;top:12px;right:12px;z-index:9999;background:#0a84ff;color:#fff;padding:.55rem .7rem;border-radius:.6rem;display:none}
+    .totals{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;padding:.5rem .6rem;border:1px solid #eee;border-radius:.6rem;background:#fbfbfb;margin:.5rem 0}
+    .totals .badge{padding:.2rem .5rem;border:1px solid #e0e0e0;border-radius:999px}
   </style>
 
-  <!-- Libs: robust (keine ES-Module) -->
+  <!-- Libs (robust, ohne ES-Module) -->
   <script src="https://cdn.jsdelivr.net/npm/idb-keyval@6/dist/idb-keyval-iife.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.js"></script>
   <script>pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.min.js";</script>
@@ -43,7 +68,7 @@
   <header>
     <div>
       <h1>Presse Remi – Abgleich</h1>
-      <div class="muted">Speicherung lokal (IndexedDB). Offline nutzbar.</div>
+      <div class="muted">Lokale Speicherung (IndexedDB). Offline nutzbar.</div>
       <div class="banner">ℹ️ Hinweis: Rechnungen & Remissionen werden nur <u>3 Monate</u> intern gespeichert. Ältere Einträge löscht die App automatisch.</div>
     </div>
     <div style="margin-left:auto;display:flex;gap:.5rem;align-items:center;">
@@ -63,14 +88,14 @@
     <h2>1) Daten eingeben</h2>
     <p class="muted">JSON einfügen oder per Datei importieren (EML, PDF, JSON). Felder: kundennummer/pakete[].kundennummer, pakete[].nr, datum, status, rechnungen[], summe …</p>
     <textarea id="inputArea"></textarea>
-    <div style="display:flex;gap:.5rem;margin:.6rem 0;">
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin:.6rem 0;">
       <button id="saveBtn" class="primary">Speichern</button>
       <button id="loadBtn">Laden</button>
       <button id="clearBtn">Löschen</button>
       <button id="exportCsv">CSV</button>
       <button id="exportPdf">PDF</button>
       <button id="exportJson">JSON</button>
-      <label><input id="importFile" type="file" accept=".json,application/json"> <button id="importBtn">Import Datei</button></label>
+      <label><input id="importFile" type="file" accept=".json,application/json" style="display:none"><button id="importBtn">Import Datei</button></label>
     </div>
 
     <h2>2) Filter</h2>
@@ -81,6 +106,12 @@
       <label>Bis <input id="dateTo" type="date"></label>
       <button id="toggleMissing">Nur fehlende anzeigen</button>
       <button id="clearSearch">Leeren</button>
+    </div>
+
+    <div id="totals" class="totals" hidden>
+      <span class="badge" id="badgeCount">0 Pakete</span>
+      <span class="badge" id="badgeMissing">0 fehlend</span>
+      <span class="badge" id="badgeSum">Summe: –</span>
     </div>
 
     <div id="overview" class="list" style="margin-top:.6rem;"></div>
@@ -95,6 +126,7 @@
       <div>Erlaubter Absender 3</div><input id="allowed3" placeholder="optional">
       <div></div><button id="settingsSave" class="primary">Speichern</button>
     </div>
+    <p class="muted">Nur Mails von diesen Absendern werden verarbeitet (wenn Gmail aktiv ist).</p>
   </section>
 
   <!-- Statistik -->
@@ -104,35 +136,19 @@
   </section>
 
   <script>
-    // ===== Fehler sofort sichtbar machen (hilft beim Debuggen) =====
+    // ===== Fehler sichtbar machen (hilft beim Debuggen) =====
     window.addEventListener('error', e=>{
-      const m = 'JS-Fehler: ' + (e.error?.message || e.message);
-      console.error(m, e.error||e);
-      alert(m);
+      const m='JS-Fehler: '+(e.error?.message||e.message); console.error(m,e.error||e); alert(m);
     });
     window.addEventListener('unhandledrejection', e=>{
-      const m = 'Promise-Fehler: ' + (e.reason?.message || e.reason || '');
-      console.error(m, e.reason);
-      alert(m);
+      const m='Promise-Fehler: '+(e.reason?.message||e.reason||''); console.error(m,e.reason); alert(m);
     });
 
-    // ===== Mini-Framework =====
-    const toast = (msg)=>{ const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; setTimeout(()=>el.style.display='none', 3000); };
-    const TABS = Array.from(document.querySelectorAll('.tab'));
-    const VIEWS = Array.from(document.querySelectorAll('section[data-view]'));
-    const setTab = (name)=>{
-      TABS.forEach(t=>t.classList.toggle('active', t.dataset.tab===name));
-      VIEWS.forEach(v=>v.style.display = (v.dataset.view===name ? '' : 'none'));
-    };
-    TABS.forEach(t=>t.addEventListener('click', ()=>setTab(t.dataset.tab)));
-
-    // ===== Storage (pro User vereinfacht) =====
+    // ===== Utils / State =====
     const { get, set, del } = window.idbKeyval;
     const KEY = 'presse-remi-daten-v10';
     const readStore = ()=> get(KEY).then(x=>x||{kundennummer:'', pakete:[]});
     const writeStore = (obj)=> set(KEY, obj);
-
-    // ===== Hilfen =====
     const norm = s => (s||'').toString().toLowerCase();
     const fmtEuro = n => (typeof n==='number') ? new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(n) : '';
     const parseDateAny = s=>{
@@ -146,71 +162,81 @@
       const F=from?new Date(from+'T00:00:00'):null, T=to?new Date(to+'T23:59:59'):null;
       if(F && d<F) return false; if(T && d>T) return false; return true;
     };
+    const toast = (msg)=>{ const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; setTimeout(()=>el.style.display='none', 3000); };
+
+    // ===== Tabs =====
+    const TABS = Array.from(document.querySelectorAll('.tab'));
+    const VIEWS = Array.from(document.querySelectorAll('section[data-view]'));
+    function setTab(name){ TABS.forEach(t=>t.classList.toggle('active',t.dataset.tab===name)); VIEWS.forEach(v=>v.style.display=v.dataset.view===name?'':'none'); }
+    TABS.forEach(t=>t.addEventListener('click',()=>setTab(t.dataset.tab)));
 
     // ===== Elemente =====
-    const inputArea = document.getElementById('inputArea');
-    const overview = document.getElementById('overview');
-    const kdnrSelect = document.getElementById('kdnrSelect');
-    const searchInput = document.getElementById('searchInput');
-    const dateFrom = document.getElementById('dateFrom');
-    const dateTo = document.getElementById('dateTo');
-    let onlyMissing = false;
+    const inputArea=document.getElementById('inputArea');
+    const overview=document.getElementById('overview');
+    const kdnrSelect=document.getElementById('kdnrSelect');
+    const searchInput=document.getElementById('searchInput');
+    const dateFrom=document.getElementById('dateFrom');
+    const dateTo=document.getElementById('dateTo');
+    const totals=document.getElementById('totals');
+    const badgeCount=document.getElementById('badgeCount');
+    const badgeMissing=document.getElementById('badgeMissing');
+    const badgeSum=document.getElementById('badgeSum');
+    let onlyMissing=false;
 
     // ===== Render =====
     function fillKdnrDropdown(kdnrs){
-      const cur = kdnrSelect.value;
-      kdnrSelect.innerHTML = '<option value="">Alle Kunden</option>'+kdnrs.map(k=>`<option>${k}</option>`).join('');
-      if(cur && kdnrs.includes(cur)) kdnrSelect.value = cur;
+      const cur=kdnrSelect.value;
+      kdnrSelect.innerHTML='<option value="">Alle Kunden</option>'+kdnrs.map(k=>`<option>${k}</option>`).join('');
+      if(cur && kdnrs.includes(cur)) kdnrSelect.value=cur;
     }
     function computeStats(data){
-      const list = data.pakete||[];
-      const artikel = list.reduce((a,p)=>a+(p.positionen?.reduce((x,y)=>x+(y.menge||0),0)||0),0);
-      const diffs = list.reduce((a,p)=>a+(p.differenzen?.length||0),0);
-      const fehlt = list.filter(p=>norm(p.status)==='fehlt').length;
-      return {pakete:list.length, artikel, fehler:diffs+fehlt, fehlt};
+      const list=data.pakete||[];
+      const artikel=list.reduce((a,p)=>a+(p.positionen?.reduce((x,y)=>x+(y.menge||0),0)||0),0);
+      const diffs=list.reduce((a,p)=>a+(p.differenzen?.length||0),0);
+      const fehlt=list.filter(p=>norm(p.status)==='fehlt').length;
+      return {pakete:list.length, artikel, fehler:diffs+fehlt, fehlt, sum: list.reduce((a,p)=>a+(typeof p.summe==='number'?p.summe:0),0)};
     }
-    function rowHtml(p, k){
-      const re = (p.rechnungen||[]).map(r=>`<span class="pill" style="background:#f0f3ff;border:1px solid #e0e7ff;color:#1558d6;margin-right:.25rem;">RG ${r}</span>`).join('');
-      return `
-        <details class="card">
-          <summary><b>Paket ${p.nr||''}</b> • <span class="muted">${p.datum||''}</span> • Kdnr ${k||''} • <span class="muted">${p.status||''}</span></summary>
-          <div style="margin-top:.5rem;">
-            <div>${re||'<span class="muted">Keine Rechnungen</span>'}</div>
-            ${p.notizen?`<p><b>Notizen:</b> ${p.notizen}</p>`:''}
+    function rowHtml(p,k){
+      const re=(p.rechnungen||[]).map(r=>`<span class="chip">RG ${r}</span>`).join('');
+      return `<details class="card">
+        <summary>
+          <div class="row">
+            <div><b>Paket ${p.nr||''}</b></div>
+            <div class="muted">${p.datum||''}</div>
+            <div>${re||'<span class="muted">–</span>'}</div>
+            <div class="muted">${p.status||''}</div>
           </div>
-        </details>`;
+          <div class="muted">Kdnr ${k||''} • Summe ${typeof p.summe==='number'?fmtEuro(p.summe):'–'}</div>
+        </summary>
+        ${p.notizen?`<div style="margin-top:.5rem"><b>Notizen:</b> ${p.notizen}</div>`:''}
+      </details>`;
     }
     function render(data){
-      const gk = data.kundennummer||'';
-      const listAll = (data.pakete||[]).map(p=>({...p, _k: p.kundennummer||gk}));
-      const q = norm(searchInput.value);
-      const ksel = kdnrSelect.value;
-      const f = dateFrom.value, t = dateTo.value;
-      let list = listAll.filter(p=>{
-        const d = parseDateAny(p.datum);
+      const gk=data.kundennummer||'';
+      const listAll=(data.pakete||[]).map(p=>({...p,_k:p.kundennummer||gk}));
+      const q=norm(searchInput.value); const ksel=kdnrSelect.value; const f=dateFrom.value; const t=dateTo.value;
+      const list=listAll.filter(p=>{
+        const d=parseDateAny(p.datum);
         return (!ksel || p._k===ksel)
           && (!q || [p.nr,p.datum,p.status,p.filiale,(p.rechnungen||[]).join(' '),p._k].some(x=>norm(x).includes(q)))
           && (!onlyMissing || norm(p.status)==='fehlt')
           && (!f && !t ? true : inRange(d,f,t));
       });
       overview.innerHTML = list.length ? list.map(p=>rowHtml(p,p._k)).join('') : '<div class="muted">Keine Treffer…</div>';
-      const s = computeStats(data);
-      document.getElementById('statsBox').innerHTML = `Pakete: ${s.pakete} • Artikel geprüft: ${s.artikel} • Fehler: ${s.fehler} • Fehlend: ${s.fehlt}`;
+      const s=computeStats({pakete:list});
+      if(list.length){ totals.hidden=false; badgeCount.textContent=`${s.pakete} Pakete`; badgeMissing.textContent=`${s.fehlt} fehlend`; badgeSum.textContent=`Summe: ${fmtEuro(s.sum)}`; } else { totals.hidden=true; }
+      // Statistik-Tab (gesamt)
+      const sAll=computeStats(data);
+      document.getElementById('statsBox').innerHTML=`Pakete: ${sAll.pakete} • Artikel geprüft: ${sAll.artikel} • Fehler: ${sAll.fehler} • Fehlend: ${sAll.fehlt}`;
     }
 
-    // ===== Events =====
+    // ===== Buttons / Events =====
     document.getElementById('forceUpdate').addEventListener('click', async ()=>{
-      try {
-        if ('serviceWorker' in navigator) {
-          const regs = await navigator.serviceWorker.getRegistrations();
-          for (const r of regs) await r.unregister();
-        }
-        if ('caches' in window) {
-          const keys = await caches.keys();
-          await Promise.all(keys.map(k=>caches.delete(k)));
-        }
-      } catch(e){ console.warn(e); }
-      toast('Update erzwungen – neu laden…'); setTimeout(()=>location.reload(true), 600);
+      try{
+        if('serviceWorker' in navigator){ const regs=await navigator.serviceWorker.getRegistrations(); for(const r of regs) await r.unregister(); }
+        if('caches' in window){ const keys=await caches.keys(); await Promise.all(keys.map(k=>caches.delete(k))); }
+      }catch(e){ console.warn(e); }
+      toast('Update erzwingen: Cache geleert'); setTimeout(()=>location.reload(true),600);
     });
     document.getElementById('toggleMissing').addEventListener('click', async ()=>{ onlyMissing=!onlyMissing; render(await readStore()); });
     document.getElementById('clearSearch').addEventListener('click', async ()=>{ searchInput.value=''; dateFrom.value=''; dateTo.value=''; render(await readStore()); });
@@ -219,29 +245,40 @@
     dateTo.addEventListener('change', async ()=>render(await readStore()));
 
     document.getElementById('saveBtn').addEventListener('click', async ()=>{
-      try{ let obj=JSON.parse(document.getElementById('inputArea').value||'{}'); await writeStore(obj); toast('Gespeichert ✅'); render(obj); }
+      try{ let obj=JSON.parse(inputArea.value||'{}'); obj=pruneOld(obj||{kundennummer:'',pakete:[]}); await writeStore(obj); toast('Gespeichert ✅'); render(obj); }
       catch(e){ toast('JSON-Fehler: '+e.message); }
     });
-    document.getElementById('loadBtn').addEventListener('click', async ()=>{ const d=await readStore(); document.getElementById('inputArea').value=JSON.stringify(d,null,2); render(d); });
-    document.getElementById('clearBtn').addEventListener('click', async ()=>{ await del(KEY); document.getElementById('inputArea').value=''; render({kundennummer:'',pakete:[]}); toast('Gelöscht ✅'); });
+    document.getElementById('loadBtn').addEventListener('click', async ()=>{ let d=await readStore(); d=pruneOld(d||{kundennummer:'',pakete:[]}); await writeStore(d); inputArea.value=JSON.stringify(d,null,2); render(d); });
+    document.getElementById('clearBtn').addEventListener('click', async ()=>{ await del(KEY); inputArea.value=''; render({kundennummer:'',pakete:[]}); toast('Gelöscht ✅'); });
 
     document.getElementById('importBtn').addEventListener('click', ()=>document.getElementById('importFile').click());
     document.getElementById('importFile').addEventListener('change', async e=>{
-      const f=e.target.files?.[0]; if(!f) return;
-      const text=await f.text(); let obj=JSON.parse(text); await writeStore(obj); render(obj); toast('Importiert ✅'); e.target.value='';
+      const f=e.target.files?.[0]; if(!f) return; const text=await f.text(); let obj=JSON.parse(text); obj=pruneOld(obj); await writeStore(obj); render(obj); toast('Importiert ✅'); e.target.value='';
     });
+
+    // ===== 3-Monats-Auto-Löschung =====
+    function threeMonthsAgo(){ const d=new Date(); d.setMonth(d.getMonth()-3); d.setHours(0,0,0,0); return d; }
+    function pruneOld(data){
+      const before=(data.pakete||[]).length, cutoff=threeMonthsAgo(); const keep=[];
+      for(const p of (data.pakete||[])){ const d=parseDateAny(p.datum); if(!d || d<cutoff) continue; keep.push(p); }
+      data.pakete=keep; const removed=before-keep.length; if(removed>0) toast(`Aufgeräumt: ${removed} ältere Einträge entfernt`);
+      return data;
+    }
 
     // ===== Init =====
     (async ()=>{
       setTab('main');
-      const d = await readStore();
-      document.getElementById('inputArea').value = JSON.stringify(d,null,2);
-      const kset = new Set(); if(d.kundennummer) kset.add(String(d.kundennummer));
-      (d.pakete||[]).forEach(p=>{ if(p.kundennummer) kset.add(String(p.kundennummer)); });
-      const allK = Array.from(kset).sort(); fillKdnrDropdown(allK);
+      let d=await readStore(); d=pruneOld(d||{kundennummer:'',pakete:[]}); await writeStore(d);
+      inputArea.value=JSON.stringify(d,null,2);
+      const kset=new Set(); if(d.kundennummer) kset.add(String(d.kundennummer)); (d.pakete||[]).forEach(p=>{ if(p.kundennummer) kset.add(String(p.kundennummer)); });
+      fillKdnrDropdown(Array.from(kset).sort());
       render(d);
       toast('App geladen ✅');
     })();
+
+    // ===== (Optional) Gmail vorbereiten – später Client-ID eintragen =====
+    const GOOGLE_CLIENT_ID = "HIER_DEINE_CLIENT_ID.apps.googleusercontent.com"; // <— ersetzen, wenn Gmail genutzt wird
+    // Hinweis: Sobald du die Client-ID gesetzt hast, baue ich dir gerne die zwei Buttons "Gmail verbinden / E-Mails abrufen" wieder ein.
   </script>
 </body>
 </html>
