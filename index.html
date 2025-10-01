@@ -1,211 +1,232 @@
-<script>
-/* ===== 0) Google Client-ID ===== */
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Presse Remi – Abgleich</title>
+  <meta name="theme-color" content="#0a84ff">
+
+  <style>
+    :root { --blue:#0a84ff; --muted:#666; }
+    *{box-sizing:border-box}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:1rem auto;max-width:1150px;padding:0 1rem;background:#fff}
+    header{display:flex;gap:12px;align-items:center}
+    h1{font-size:1.45rem;margin:.5rem 0}
+    h2{margin:.7rem 0 .35rem}
+    .muted{color:var(--muted);font-size:.95rem}
+    .banner{margin:.75rem 0;padding:.6rem .8rem;border:1px solid #dbe5ff;background:#f4f7ff;border-radius:.6rem;color:#1a3daa}
+    .pill{display:inline-block;padding:.2rem .5rem;border-radius:1rem;background:#eef3ff;color:#0a84ff;font-size:.85rem}
+    .tabs{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem}
+    .tab{padding:.45rem .7rem;border:1px solid #d0d0d0;border-radius:.6rem;cursor:pointer}
+    .tab.active{background:#0a84ff;color:#fff;border-color:#0a84ff}
+    button{padding:.55rem .85rem;border-radius:.6rem;border:1px solid #d0d0d0;background:#fff;cursor:pointer}
+    button.primary{background:#0a84ff;color:#fff;border-color:#0a84ff}
+    textarea{width:100%;min-height:160px;border:1px solid #d0d0d0;border-radius:.6rem;padding:.6rem;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    input[type="text"],input[type="date"],select{padding:.5rem .65rem;border:1px solid #d0d0d0;border-radius:.6rem}
+    .list{margin-top:.6rem}
+    .card{border:1px solid #e8e8e8;border-radius:.8rem;padding:.75rem .9rem;margin:.5rem 0;background:#fff}
+    details summary{list-style:none;cursor:pointer}
+    details summary::-webkit-details-marker{display:none}
+    .row{display:grid;grid-template-columns:120px 120px 1fr 120px;gap:.6rem;align-items:center}
+    .chip{display:inline-block;border:1px solid #e0e0e0;border-radius:999px;padding:.15rem .5rem;font-size:.85rem;margin:.1rem .25rem 0 0}
+    .toast{position:fixed;top:12px;right:12px;z-index:9999;background:#0a84ff;color:#fff;padding:.55rem .7rem;border-radius:.6rem;display:none}
+    .totals{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;padding:.5rem .6rem;border:1px solid #eee;border-radius:.6rem;background:#fbfbfb;margin:.5rem 0}
+    .totals .badge{padding:.2rem .5rem;border:1px solid #e0e0e0;border-radius:999px}
+    .drop{border:2px dashed #c9d1e6;border-radius:.6rem;padding:10px;background:#f8faff}
+    .actions{display:flex;gap:.5rem;flex-wrap:wrap;margin:.6rem 0}
+  </style>
+
+  <!-- Libs -->
+  <script src="https://cdn.jsdelivr.net/npm/idb-keyval@6/dist/idb-keyval-iife.min.js"></script>
+
+  <!-- PDF.js (cdnjs, fester Worker – verhindert „pdfjsLib not found“) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    window.pdfjsLib ||= window['pdfjs-dist/build/pdf'];
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  </script>
+
+  <!-- Export-Tools -->
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+
+  <!-- Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+  <div id="toast" class="toast"></div>
+
+  <header>
+    <div>
+      <h1>Presse Remi – Abgleich</h1>
+      <div class="muted">Lokale Speicherung. Offline nutzbar.</div>
+      <div class="banner">ℹ️ Rechnungen & Remissionen werden nur <u>3 Monate</u> intern gespeichert. Ältere Einträge werden automatisch gelöscht.</div>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:.5rem;align-items:center;">
+      <button id="forceUpdate">Update erzwingen</button>
+      <span class="pill">Vollversion</span>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="main">Übersicht</div>
+    <div class="tab" data-tab="settings">Einstellungen</div>
+    <div class="tab" data-tab="stats">Statistik</div>
+  </div>
+
+  <!-- Übersicht -->
+  <section data-view="main">
+    <h2>1) Daten eingeben</h2>
+    <p class="muted">Option A: JSON hier einfügen und speichern • Option B: Datei importieren (PDF, EML, JSON) • Option C: per Gmail abrufen (nur Qtrado).</p>
+    <textarea id="inputArea" placeholder='{"kundennummer":"","pakete": []}'></textarea>
+    <div class="actions">
+      <button id="saveBtn" class="primary">Speichern</button>
+      <button id="loadBtn">Laden</button>
+      <button id="clearBtn">Löschen</button>
+      <button id="exportCsv">CSV</button>
+      <button id="exportPdf">PDF</button>
+      <button id="exportJson">JSON</button>
+      <label>
+        <input id="importFile" type="file" accept=".json,.eml,application/pdf" style="display:none">
+        <button id="importBtn">Import Datei</button>
+      </label>
+      <span style="flex:1"></span>
+      <button id="gmailConnect">Gmail verbinden</button>
+      <button id="gmailFetch" disabled>E-Mails abrufen (Qtrado)</button>
+    </div>
+
+    <div class="drop" id="dropZone">Oder Datei per Drag&Drop hier ablegen</div>
+
+    <h2>2) Filter</h2>
+    <div class="actions">
+      <select id="kdnrSelect"><option value="">Alle Kunden</option></select>
+      <input id="searchInput" placeholder="Suchen… (Paket, Rechnung, Datum, Filiale)">
+      <label>Von <input id="dateFrom" type="date"></label>
+      <label>Bis <input id="dateTo" type="date"></label>
+      <button id="toggleMissing">Nur fehlende anzeigen</button>
+      <button id="clearSearch">Leeren</button>
+    </div>
+
+    <div id="totals" class="totals" hidden>
+      <span class="badge" id="badgeCount">0 Pakete</span>
+      <span class="badge" id="badgeMissing">0 fehlend</span>
+      <span class="badge" id="badgeSum">Summe: –</span>
+    </div>
+
+    <div id="overview" class="list"></div>
+  </section>
+
+  <!-- Einstellungen -->
+  <section data-view="settings" style="display:none;">
+    <h2>Einstellungen</h2>
+    <div style="display:grid;grid-template-columns:180px 1fr;gap:.5rem .75rem;max-width:720px;">
+      <div>Erlaubter Absender 1</div><input id="allowed1" placeholder="z.B. remi@qtrado.de">
+      <div>Erlaubter Absender 2</div><input id="allowed2" placeholder="optional">
+      <div>Erlaubter Absender 3</div><input id="allowed3" placeholder="optional">
+      <div>Suchwörter</div><input id="keywords" placeholder="z.B. Remission, Rechnung" value="Remission,Rechnung">
+      <div></div><button id="settingsSave" class="primary">Speichern</button>
+    </div>
+    <p class="muted">Standard: es werden nur Absender mit „@qtrado.de“ verarbeitet.</p>
+  </section>
+
+  <!-- Statistik -->
+  <section data-view="stats" style="display:none;">
+    <h2>Statistik</h2>
+    <div id="statsBox" class="card"></div>
+  </section>
+
+  <script>
+/* ===== 0) Google Client-ID (korrekt) ===== */
 const GOOGLE_CLIENT_ID = "836994805779-78af1p2hpubkidbklko086s93j165lv5.apps.googleusercontent.com";
 let gisClient=null, accessToken=null;
 
-/* ===== 1) Update erzwingen: SW & Cache löschen ===== */
-document.getElementById('forceUpdate').addEventListener('click', async ()=>{
-  try{
-    if('serviceWorker' in navigator){
-      const regs=await navigator.serviceWorker.getRegistrations();
-      for(const r of regs) await r.unregister();
-    }
-    if('caches' in window){
-      const keys=await caches.keys();
-      await Promise.all(keys.map(k=>caches.delete(k)));
-    }
-  }catch(e){}
-  alert('Update erzwungen – Seite wird neu geladen…');
-  location.reload(true);
-});
+/* ===== 1) Auto-Clean (SW/Caches weg) ===== */
+(async()=>{try{
+  if('serviceWorker' in navigator){const r=await navigator.serviceWorker.getRegistrations();for(const x of r) await x.unregister();}
+  if('caches' in window){const k=await caches.keys();await Promise.all(k.map(c=>caches.delete(c)));}
+}catch(e){}})();
 
-/* ===== 2) Speicher & 3-Monate-Auto-Löschung ===== */
+/* ===== 2) Speicher ===== */
 const __idb = window.idbKeyval || { get: async k=>JSON.parse(localStorage.getItem(k)||'null'), set: async (k,v)=>localStorage.setItem(k,JSON.stringify(v)), del: async k=>localStorage.removeItem(k) };
 const {get,set,del}=__idb;
 const KEY='presse-remi-daten-v10', SETTINGS_KEY='presse-remi-settings-v10';
-
-async function ensureShape(d){ d=d||{kundennummer:'',pakete:[],rechnungen:{}}; d.pakete ||= []; d.rechnungen ||= {}; return d; }
-function parseDateAny(s){ return (s && /^\d{4}-\d{2}-\d{2}$/.test(s)) ? new Date(s+'T00:00:00') : null; }
-function threeMonthsAgo(){ const d=new Date(); d.setMonth(d.getMonth()-3); d.setHours(0,0,0,0); return d; }
-function pruneOld(data){ const cut=threeMonthsAgo(); data.pakete=(data.pakete||[]).filter(p=>{ const d=parseDateAny(p.datum); return d && d>=cut; }); return data; }
-
-const readStore=async()=> ensureShape(await get(KEY));
-const writeStore=async(o)=> set(KEY, await ensureShape(o));
+const readStore=()=>get(KEY).then(x=>x||{kundennummer:'',pakete:[]});
+const writeStore=(o)=>set(KEY,o);
 const readSettings=()=>get(SETTINGS_KEY).then(x=>x||{allowed1:'',allowed2:'',allowed3:'',keywords:'Remission,Rechnung'});
 
 /* ===== 3) Utils ===== */
-const toast=m=>{const t=document.getElementById('toast'); if(!t){alert(m);return;} t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',2200);};
-const fmtEuro=n=>typeof n==='number'?new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(n):'';
+const toast=m=>{const el=document.getElementById('toast');el.textContent=m;el.style.display='block';setTimeout(()=>el.style.display='none',2500);};
 const norm=s=>(s||'').toString().toLowerCase();
-function colorFor(str){ str=String(str||''); let h=0; for(let i=0;i<str.length;i++) h=(h*31 + str.charCodeAt(i))>>>0; const hues=[0,210,40,280,160,330,20,200,90,260,120,300,30,180,240]; const hue=hues[h%hues.length]; return `hsl(${hue} 75% 45%)`; }
-function chipStyleFor(str){ const c=colorFor(str); return `color:${c};border-color:${c};background:color-mix(in hsl, ${c} 12%, white);`; }
-const decodeB64Url = s => { try { return atob(String(s||'').replace(/-/g,'+').replace(/_/g,'/')); } catch { return ''; } };
+const parseDateAny=s=>s && /^\d{4}-\d{2}-\d{2}$/.test(s)?new Date(s+'T00:00:00'):null;
+function threeMonthsAgo(){const d=new Date();d.setMonth(d.getMonth()-3);d.setHours(0,0,0,0);return d;}
+function pruneOld(data){const c=threeMonthsAgo();data.pakete=(data.pakete||[]).filter(p=>{const d=parseDateAny(p.datum);return d && d>=c;});return data;}
+const fmtEuro=n=>typeof n==='number'?new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(n):'';
 
-/* ===== 4) Parser (PDF/EML/Text → Felder & Positionen) ===== */
+/* ===== 4) Parser ===== */
 function scanTextForFields(t){
   if(!t) return {};
-  const paket=(t.match(/(?:paket(?:nr|nummer)?|paket)\s*[-: ]\s*([0-9]{3,})/i) || t.match(/\bPaket\s*([0-9]{3,})\b/i))?.[1];
-  const kdnr=(t.match(/kunden(?:nr|nummer)?\s*[-: ]\s*([0-9]{3,})/i) || t.match(/\bKdnr\.?\s*([0-9]{3,})\b/i))?.[1];
-  const rgHits = Array.from(t.matchAll(/(?:rechnung(?:s)?nr|rechnungsnummer|rg|rechnung)\s*[-: ]?\s*([0-9]{6,})/ig)).map(m=>m[1]);
+  const paket=(t.match(/(?:paket(?:nr|nummer)?|paket)\s*[-: ]\s*([0-9]{3,})/i)|| t.match(/\bPaket\s*([0-9]{3,})\b/i))?.[1];
+  const kdnr=(t.match(/kunden(?:nr|nummer)?\s*[-: ]\s*([0-9]{3,})/i)|| t.match(/\bKdnr\.?\s*([0-9]{3,})\b/i))?.[1];
+  const re=Array.from(t.matchAll(/(?:rechnung(?:s)?nr|rechnungsnummer|rg|rechnung)\s*[-: ]?\s*([0-9]{6,})/ig)).map(m=>m[1]);
   const iso=(t.match(/(20[2-5][0-9]-[01][0-9]-[0-3][0-9])/))?.[1];
   const de=(t.match(/([0-3][0-9]\.[01][0-9]\.20[2-5][0-9])/))?.[1];
   const datum=iso || (de ? de.split('.').reverse().join('-') : '');
-  const isInvoice = /rechnung|rechnungsnummer|rg[- :]?\d+/i.test(t) && !/gutschrift/i.test(t);
-  const isRemi    = /remission|remi[- ]?liste|rückgabe|gutschrift/i.test(t) || !isInvoice;
-
-  const lines = t.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-  const asNumber = s => { if(!s) return null; s=s.replace(/\s/g,'').replace(/\./g,'').replace(/,/g,'.'); const v=parseFloat(s); return isFinite(v)?v:null; };
-
-  const items=[];
-  for(let i=0;i<lines.length;i++){
-    const L=lines[i];
-    let m = L.match(/^(\d{8,14}|[A-Z0-9][A-Z0-9._-]{2,})\s+(.+?)\s+(\d{1,6})\s+(\d+[.,]\d{2})\s+(\d+[.,]\d{2})$/i);
-    if(m){ const [_, code, title, qty, unit, total]=m; items.push({code, title, qty:+qty, unit:asNumber(unit), total:asNumber(total)}); continue; }
-    let m1=L.match(/^(\d{8,14}|[A-Z0-9][A-Z0-9._-]{2,})\s+(.+)$/i);
-    if(m1 && i+1<lines.length){
-      const L2=lines[i+1];
-      let m2 = L2.match(/^(\d{1,6})\s*(?:x|×)?\s*(\d+[.,]\d{2})\s*(?:=|≈)?\s*(\d+[.,]\d{2})$/i)
-             || L2.match(/^(\d{1,6})\s+(\d+[.,]\d{2})\s+(\d+[.,]\d{2})$/i);
-      if(m2){ const [__, qty, unit, total]=m2; items.push({code:m1[1], title:m1[2], qty:+qty, unit:asNumber(unit), total:asNumber(total)}); i++; continue; }
-    }
-  }
-
-  return { paket, kdnr, rechnungen: rgHits, datum, type: isInvoice ? 'invoice' : (isRemi ? 'remission' : 'unknown'), items };
+  return { paket, kdnr, rechnungen: re, datum };
 }
 async function pdfBlobToText(blob){
-  const arr=await blob.arrayBuffer();
-  const pdf=await pdfjsLib.getDocument({data:arr}).promise;
-  let t=''; 
-  for(let i=1;i<=pdf.numPages;i++){
-    const page=await pdf.getPage(i);
-    const c=await page.getTextContent();
-    t+=c.items.map(it=>it.str).join(' ')+'\n';
-  }
+  const arr=await blob.arrayBuffer(); const pdf=await pdfjsLib.getDocument({data:arr}).promise;
+  let t=''; for(let i=1;i<=pdf.numPages;i++){ const page=await pdf.getPage(i); const c=await page.getTextContent(); t+=c.items.map(it=>it.str).join(' ')+'\n'; }
   return t;
 }
-
-/* ===== 5) Abgleich & Zusammenführen ===== */
-function diffItems(remiItems, invItems){
-  const idx = arr => {
-    const map=new Map();
-    for(const it of (arr||[])){
-      const key=(it.code||'').toLowerCase()+'|'+(it.title||'').toLowerCase();
-      const cur=map.get(key)||{qty:0,unit:null,total:0};
-      cur.qty += Number(it.qty||0);
-      cur.unit = cur.unit ?? it.unit ?? null;
-      cur.total = (cur.total||0) + (Number(it.total||0)||0);
-      map.set(key,cur);
-    }
-    return map;
-  };
-  const R=idx(remiItems), I=idx(invItems);
-  const missing=[], extra=[], mismatch=[];
-  for(const [key,rVal] of R.entries()){
-    if(!I.has(key)){ missing.push({key,expected:rVal}); continue; }
-    const iVal=I.get(key);
-    if(Number(rVal.qty||0)!==Number(iVal.qty||0)){ mismatch.push({key, remiQty:rVal.qty, invQty:iVal.qty}); }
-  }
-  for(const [key,iVal] of I.entries()){ if(!R.has(key)) extra.push({key,found:iVal}); }
-  return {missing, extra, mismatch};
-}
-
 async function mergeParsedIntoStore(parsed){
-  let data = await readStore(); data = await ensureShape(data);
-
-  // Rechnungen global sammeln
-  if(parsed.type==='invoice' && parsed.rechnungen?.length){
-    for(const rg of parsed.rechnungen){
-      const r=data.rechnungen[rg] || {nr:rg, datum:parsed.datum||'', items:[]};
-      if(parsed.items?.length){
-        const seen=new Set(r.items.map(x=>x.code+'|'+x.title));
-        for(const it of parsed.items){
-          const key=(it.code||'')+'|'+(it.title||'');
-          if(!seen.has(key)){ r.items.push(it); seen.add(key); }
-        }
-      }
-      if(parsed.datum && !r.datum) r.datum = parsed.datum;
-      data.rechnungen[rg]=r;
-    }
-  }
-
-  // Paket erzeugen/füllen
-  if(parsed.paket || parsed.kdnr || parsed.items?.length){
-    let p = parsed.paket ? (data.pakete||[]).find(x=>x.nr===parsed.paket) : null;
-    if(!p){ p={nr:parsed.paket||'unbekannt', datum:parsed.datum||'', status:'offen', rechnungen:[], positionen:[], differenzen:[]}; data.pakete.push(p); }
-    if(parsed.kdnr){ p.kundennummer = parsed.kdnr; }
-    if(parsed.datum && !p.datum){ p.datum = parsed.datum; }
-
-    if(parsed.type!=='invoice' && parsed.items?.length){
-      const seen=new Set(p.positionen.map(x=>x.code+'|'+x.title));
-      for(const it of parsed.items){
-        const key=(it.code||'')+'|'+(it.title||'');
-        if(!seen.has(key)){ p.positionen.push(it); seen.add(key); }
-      }
-    }
-    if(parsed.type==='invoice' && parsed.rechnungen?.length){
-      for(const rg of parsed.rechnungen){ if(!p.rechnungen.includes(rg)) p.rechnungen.push(rg); }
-    }
-  }
-
-  // Abgleich je Paket ↔ Rechnung
-  for(const p of data.pakete){
-    p.differenzen=[];
-    for(const rg of (p.rechnungen||[])){
-      const r=data.rechnungen[rg]; if(!r) continue;
-      const diffs=diffItems(p.positionen||[], r.items||[]);
-      p.differenzen.push({rg, ...diffs});
-      const hasIssues = diffs.missing.length || diffs.extra.length || diffs.mismatch.length;
-      if(hasIssues) p.status='fehlt'; else if(p.status==='fehlt') p.status='offen';
-    }
-  }
-
-  data = pruneOld(data);
-  await writeStore(data);
+  if(!parsed.paket && !parsed.rechnungen?.length && !parsed.kdnr) return false;
+  let data=await readStore();
+  if(parsed.kdnr && !data.kundennummer) data.kundennummer=parsed.kdnr;
+  let p = parsed.paket ? (data.pakete||[]).find(x=>x.nr===parsed.paket) : null;
+  if(!p){ p={ nr: parsed.paket||'unbekannt', datum: parsed.datum||'', status:'offen', rechnungen:[], positionen:[], differenzen:[] }; (data.pakete=data.pakete||[]).push(p); }
+  if(parsed.kdnr) p.kundennummer=parsed.kdnr;
+  if(parsed.datum && !p.datum) p.datum=parsed.datum;
+  if(parsed.rechnungen?.length){ const set2=new Set([...(p.rechnungen||[]),...parsed.rechnungen]); p.rechnungen=[...set2]; }
+  data=pruneOld(data); await writeStore(data);
   const ta=document.getElementById('inputArea'); if(ta) ta.value=JSON.stringify(data,null,2);
   render(data);
   return true;
 }
 
-/* ===== 6) Render & Filter ===== */
+/* ===== 5) UI ===== */
+const TABS=[...document.querySelectorAll('.tab')], VIEWS=[...document.querySelectorAll('section[data-view]')];
+function setTab(name){TABS.forEach(t=>t.classList.toggle('active',t.dataset.tab===name)); VIEWS.forEach(v=>v.style.display=v.dataset.view===name?'':'none');}
+TABS.forEach(t=>t.addEventListener('click',()=>setTab(t.dataset.tab)));
+
 const overview=document.getElementById('overview'), inputArea=document.getElementById('inputArea');
 const kdnrSelect=document.getElementById('kdnrSelect'), searchInput=document.getElementById('searchInput');
 const dateFrom=document.getElementById('dateFrom'), dateTo=document.getElementById('dateTo');
-const totals=document.getElementById('totals'), badgeCount=document.getElementById('badgeCount'), badgeMissing=document.getElementById('badgeMissing'), badgeSum=document.getElementById('badgeSum');
+const totals=document.getElementById('totals'), badgeCount=document.getElementById('badgeCount');
+const badgeMissing=document.getElementById('badgeMissing'), badgeSum=document.getElementById('badgeSum');
 let onlyMissing=false;
 
 function fillKdnrDropdown(kdnrs){ const cur=kdnrSelect.value; kdnrSelect.innerHTML='<option value="">Alle Kunden</option>'+kdnrs.map(k=>`<option>${k}</option>`).join(''); if(cur && kdnrs.includes(cur)) kdnrSelect.value=cur; }
 function computeStats(data){
-  const list=data.pakete||[]; 
-  const abw=list.filter(p=>(p.differenzen||[]).some(d=>d.missing?.length||d.extra?.length||d.mismatch?.length)).length;
+  const list=data.pakete||[]; const fehlt=list.filter(p=>norm(p.status)==='fehlt').length;
   const sum=list.reduce((a,p)=>a+(typeof p.summe==='number'?p.summe:0),0);
-  return {pakete:list.length, abw, sum};
+  return {pakete:list.length, fehlt, sum};
 }
 function rowHtml(p,k){
-  const re=(p.rechnungen||[]).map(r=>`<span class="chip" style="${chipStyleFor(r)}">RG ${r}</span>`).join('');
-  const detail = (p.differenzen||[]).map(d=>{
-    const miss = (d.missing||[]).map(m=>{ const [code,title]=String(m.key).split('|'); return `<li>❌ fehlt: <b>${code||''}</b> – ${title||''} (erwartet ${m.expected?.qty??'?'})</li>`; }).join('');
-    const extra = (d.extra||[]).map(e=>{ const [code,title]=String(e.key).split('|'); return `<li>➕ extra: <b>${code||''}</b> – ${title||''} (Rechn. ${e.found?.qty??'?'})</li>`; }).join('');
-    const mm = (d.mismatch||[]).map(x=>{ const [code,title]=String(x.key).split('|'); return `<li>⚖️ Menge abw.: <b>${code||''}</b> – ${title||''} (Remi ${x.remiQty??'?'}, Rechn. ${x.invQty??'?'})</li>`; }).join('');
-    const ok = (!miss && !extra && !mm) ? '<div class="muted">✓ Abgleich ok</div>' : '';
-    return `<div class="card" style="margin:.4rem 0;padding:.5rem .7rem;border-color:${colorFor(d.rg)}">
-      <div class="muted" style="margin-bottom:.25rem">Abgleich zu RG <b style="color:${colorFor(d.rg)}">${d.rg}</b></div>
-      ${ok || `<ul style="margin:.2rem 0 .2rem 1rem">${miss}${extra}${mm}</ul>`}
-    </div>`;
-  }).join('') || '<div class="muted">Keine Abgleiche</div>';
-
-  const hasIssues = (p.differenzen||[]).some(x=>x.missing?.length||x.extra?.length||x.mismatch?.length);
-
-  return `<details class="card" ${hasIssues?'open':''}>
+  const re=(p.rechnungen||[]).map(r=>`<span class="chip">RG ${r}</span>`).join('');
+  return `<details class="card">
     <summary>
       <div class="row">
         <div><b>Paket ${p.nr||''}</b></div>
         <div class="muted">${p.datum||''}</div>
         <div>${re||'<span class="muted">–</span>'}</div>
-        <div class="muted" style="color:${hasIssues?'#c00':'inherit'}">${hasIssues?'abweichung':(p.status||'')}</div>
+        <div class="muted">${p.status||''}</div>
       </div>
-      <div class="muted">Kdnr ${k||''}</div>
+      <div class="muted">Kdnr ${k||''} • Summe ${typeof p.summe==='number'?fmtEuro(p.summe):'–'}</div>
     </summary>
-    ${detail}
   </details>`;
 }
 function render(data){
@@ -213,24 +234,17 @@ function render(data){
   const q=norm(searchInput?.value), ksel=kdnrSelect?.value, f=dateFrom?.value, t=dateTo?.value;
   const list=listAll.filter(p=>{
     const d=parseDateAny(p.datum);
-    const issues=(p.differenzen||[]).some(x=>x.missing?.length||x.extra?.length||x.mismatch?.length);
     return (!ksel || p._k===ksel)
       && (!q || [p.nr,p.datum,p.status,(p.rechnungen||[]).join(' '),p._k].some(x=>norm(x).includes(q)))
-      && (!onlyMissing || issues)
+      && (!onlyMissing || norm(p.status)==='fehlt')
       && (!f && !t ? true : (d && (!f || d>=new Date(f+'T00:00:00')) && (!t || d<=new Date(t+'T23:59:59'))));
   });
   overview.innerHTML = list.length ? list.map(p=>rowHtml(p,p._k)).join('') : '<div class="muted">Keine Treffer…</div>';
-  const s=computeStats({pakete:list}); if(list.length){totals.hidden=false;badgeCount.textContent=`${s.pakete} Pakete`;badgeMissing.textContent=`${s.abw} abweichend`;badgeSum.textContent=`Summe: ${fmtEuro(s.sum)}`;} else totals.hidden=true;
-
-  // Kdnr Dropdown befüllen
-  const kset=new Set(); if(data.kundennummer) kset.add(String(data.kundennummer)); (data.pakete||[]).forEach(p=>{ if(p.kundennummer) kset.add(String(p.kundennummer)); });
-  fillKdnrDropdown(Array.from(kset).sort());
-
-  // Statistik
-  const box=document.getElementById('statsBox'); if(box){ const all=computeStats(data); box.textContent=`Pakete: ${all.pakete} • Abweichend: ${all.abw} • Summe: ${fmtEuro(all.sum)}`; }
+  const s=computeStats({pakete:list}); if(list.length){totals.hidden=false;badgeCount.textContent=`${s.pakete} Pakete`;badgeMissing.textContent=`${s.fehlt} fehlend`;badgeSum.textContent=`Summe: ${fmtEuro(s.sum)}`;} else totals.hidden=true;
+  const box=document.getElementById('statsBox'); if(box){ const all=computeStats(data); box.textContent=`Pakete: ${all.pakete} • Fehlend: ${all.fehlt} • Summe: ${fmtEuro(all.sum)}`; }
 }
 
-/* ===== 7) Datei-Import (JSON/EML/PDF) ===== */
+/* ===== 6) Datei-Import ===== */
 document.getElementById('importBtn').addEventListener('click',()=>document.getElementById('importFile').click());
 document.getElementById('importFile').addEventListener('change',async e=>{for(const f of Array.from(e.target.files||[])) await handleFile(f); e.target.value='';});
 const dropZone=document.getElementById('dropZone');
@@ -239,13 +253,13 @@ const dropZone=document.getElementById('dropZone');
 dropZone.addEventListener('drop', async e=>{for(const f of Array.from(e.dataTransfer.files||[])) await handleFile(f);});
 async function handleFile(file){
   const name=(file.name||'').toLowerCase();
-  if(name.endsWith('.json')){ const obj=JSON.parse(await file.text()); await writeStore(pruneOld(obj)); inputArea.value=JSON.stringify(await readStore(),null,2); toast('JSON importiert ✅'); render(await readStore()); return; }
+  if(name.endsWith('.json')){ const obj=JSON.parse(await file.text()); await writeStore(pruneOld(obj)); inputArea.value=JSON.stringify(obj,null,2); toast('JSON importiert ✅'); return; }
   if(name.endsWith('.eml')){ const raw=await file.text(); const subj=(raw.match(/^Subject:\s*(.+)$/mi)||[])[1]||''; const body=raw.split(/\r?\n\r?\n/).slice(1).join('\n'); await mergeParsedIntoStore(scanTextForFields(subj+'\n'+body)); toast('EML importiert ✅'); return; }
   if(name.endsWith('.pdf')){ const text=await pdfBlobToText(file); await mergeParsedIntoStore(scanTextForFields(text)); toast('PDF importiert ✅'); return; }
   toast('Dateityp nicht unterstützt');
 }
 
-/* ===== 8) Export (JSON/CSV/PDF/Diff-CSV) ===== */
+/* ===== 7) Export ===== */
 function exportJSONdata(data){ const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remi-export.json'; a.click(); }
 function exportCSV(data){
   const rows=[['Kdnr','Paket','Datum','Status','Rechnungen','Summe']];
@@ -254,41 +268,21 @@ function exportCSV(data){
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remi-export.csv'; a.click();
 }
 async function exportPDFdoc(data){ const {jsPDF}=window.jspdf; const doc=new jsPDF(); doc.text('Presse Remi – Export',14,14); const rows=(data.pakete||[]).map(p=>[p.kundennummer||data.kundennummer||'',p.nr||'',p.datum||'',p.status||'',(p.rechnungen||[]).join(' '),typeof p.summe==='number'?fmtEuro(p.summe):'']); doc.autoTable({head:[['Kdnr','Paket','Datum','Status','Rechnungen','Summe']],body:rows,startY:18,styles:{fontSize:9}}); doc.save('remi-export.pdf');}
-function exportDiffCSV(data){
-  const rows = [['Kdnr','Paket','Rechnung','Typ','Code','Titel','Remi-Menge','Rechn.-Menge']];
-  const kdnr = data.kundennummer||'';
-  for(const p of (data.pakete||[])){
-    const baseK = p.kundennummer || kdnr || '';
-    for(const d of (p.differenzen||[])){
-      for(const m of (d.missing||[])){ const [code,title]=String(m.key).split('|'); rows.push([baseK,p.nr||'',d.rg||'','fehlt',code||'',title||'',m.expected?.qty??'', '0']); }
-      for(const e of (d.extra||[]))  { const [code,title]=String(e.key).split('|'); rows.push([baseK,p.nr||'',d.rg||'','extra', code||'',title||'','0', e.found?.qty??'']); }
-      for(const mm of (d.mismatch||[])){ const [code,title]=String(mm.key).split('|'); rows.push([baseK,p.nr||'',d.rg||'','menge', code||'',title||'',mm.remiQty??'',mm.invQty??'']); }
-    }
-  }
-  const csv=rows.map(r=>r.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(';')).join('\n');
-  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remi-differenzen.csv'; a.click();
-}
 
-/* Buttons */
-document.getElementById('saveBtn').addEventListener('click', async ()=>{ try{let obj=JSON.parse(inputArea.value||'{}'); obj=pruneOld(await ensureShape(obj||{kundennummer:'',pakete:[],rechnungen:{}})); await writeStore(obj); toast('Gespeichert ✅'); render(obj);}catch(e){toast('JSON-Fehler: '+e.message);} });
-document.getElementById('loadBtn').addEventListener('click', async ()=>{ let d=await readStore(); d=pruneOld(d); await writeStore(d); inputArea.value=JSON.stringify(d,null,2); toast('Geladen ✅'); render(d); });
-document.getElementById('clearBtn').addEventListener('click', async ()=>{ await del(KEY); inputArea.value=''; toast('Gelöscht ✅'); render({kundennummer:'',pakete:[],rechnungen:{}}); });
+/* ===== 8) Buttons & Events ===== */
+document.getElementById('forceUpdate').addEventListener('click', async ()=>{try{if('serviceWorker' in navigator){const r=await navigator.serviceWorker.getRegistrations();for(const x of r) await x.unregister();} if('caches' in window){const k=await caches.keys();await Promise.all(k.map(c=>caches.delete(c)));}}catch(e){} toast('Update erzwungen – neu laden…'); setTimeout(()=>location.reload(true),600);});
+document.getElementById('toggleMissing').addEventListener('click', async ()=>{ onlyMissing=!onlyMissing; toast(onlyMissing?'Nur fehlende…':'Alle anzeigen'); render(await readStore()); });
+document.getElementById('clearSearch').addEventListener('click', async ()=>{ searchInput.value=''; dateFrom.value=''; dateTo.value=''; toast('Filter zurückgesetzt'); render(await readStore()); });
+searchInput.addEventListener('input', async ()=>render(await readStore())); dateFrom.addEventListener('change', async ()=>render(await readStore())); dateTo.addEventListener('change', async ()=>render(await readStore()));
+document.getElementById('saveBtn').addEventListener('click', async ()=>{ try{let obj=JSON.parse(inputArea.value||'{}'); obj=pruneOld(obj||{kundennummer:'',pakete:[]}); await writeStore(obj); toast('Gespeichert ✅'); render(obj);}catch(e){toast('JSON-Fehler: '+e.message);} });
+document.getElementById('loadBtn').addEventListener('click', async ()=>{ let d=await readStore(); d=pruneOld(d||{kundennummer:'',pakete:[]}); await writeStore(d); inputArea.value=JSON.stringify(d,null,2); toast('Geladen ✅'); render(d); });
+document.getElementById('clearBtn').addEventListener('click', async ()=>{ await del(KEY); inputArea.value=''; toast('Gelöscht ✅'); render({kundennummer:'',pakete:[]}); });
 document.getElementById('exportJson').addEventListener('click', async ()=>exportJSONdata(await readStore()));
 document.getElementById('exportCsv').addEventListener('click', async ()=>exportCSV(await readStore()));
 document.getElementById('exportPdf').addEventListener('click', async ()=>exportPDFdoc(await readStore()));
-/* Zusatz-Button Diff-CSV */
-const diffBtn = document.createElement('button'); diffBtn.id='exportDiffCsv'; diffBtn.textContent='Diff-CSV'; 
-document.querySelector('.actions').insertBefore(diffBtn, document.getElementById('exportJson'));
-diffBtn.addEventListener('click', async ()=>exportDiffCSV(await readStore()));
+document.getElementById('settingsSave').addEventListener('click', async ()=>{ const s={allowed1:document.getElementById('allowed1').value.trim(),allowed2:document.getElementById('allowed2').value.trim(),allowed3:document.getElementById('allowed3').value.trim(),keywords:document.getElementById('keywords').value.trim()||'Remission,Rechnung'}; await set(SETTINGS_KEY,s); toast('Einstellungen gespeichert ✅'); });
 
-/* Filter */
-document.getElementById('toggleMissing').addEventListener('click', async ()=>{ onlyMissing=!onlyMissing; toast(onlyMissing?'Nur abweichende…':'Alle anzeigen'); render(await readStore()); });
-document.getElementById('clearSearch').addEventListener('click', async ()=>{ searchInput.value=''; dateFrom.value=''; dateTo.value=''; toast('Filter zurückgesetzt'); render(await readStore()); });
-searchInput.addEventListener('input', async ()=>render(await readStore()));
-dateFrom.addEventListener('change', async ()=>render(await readStore()));
-dateTo.addEventListener('change', async ()=>render(await readStore()));
-
-/* ===== 9) Gmail: Verbinden + Abruf (nur Qtrado, inkl. PDF-Anhänge) ===== */
+/* ===== 9) Gmail Login & Abruf (Qtrado, 365d, Paginierung, inkl. PDF) ===== */
 document.getElementById('gmailConnect').addEventListener('click',()=>{
   if(!window.google?.accounts?.oauth2){ toast("Google API nicht geladen – neu laden"); return; }
   gisClient=google.accounts.oauth2.initTokenClient({
@@ -301,23 +295,34 @@ document.getElementById('gmailConnect').addEventListener('click',()=>{
   gisClient.requestAccessToken();
 });
 
+// Base64URL -> UTF-8 Text
+const decodeB64Url = s => {
+  try { return atob(s.replace(/-/g,'+').replace(/_/g,'/')); } catch { return ''; }
+};
+
 document.getElementById('gmailFetch').addEventListener('click', async ()=>{
   try{
     if(!accessToken){ toast("Bitte zuerst „Gmail verbinden“"); return; }
     const s=await readSettings();
+    // Nur Absender mit qtrado + optionale Keywords aus den Einstellungen
     const sender = ['from:qtrado','from:@qtrado.de', s.allowed1, s.allowed2, s.allowed3].filter(Boolean).join(' OR ');
     const words  = (s.keywords||'Remission,Rechnung').split(',').map(w=>w.trim()).filter(Boolean).map(w=>`"${w}"`).join(' OR ');
     const baseQ  = [`(${sender})`, words?`(${words})`:'', 'newer_than:365d'].filter(Boolean).join(' ');
     toast('Suche: '+baseQ);
 
     let imported=0, nextPageToken=null, rounds=0;
+
     do{
       rounds++;
       const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(baseQ)}&maxResults=500${nextPageToken?`&pageToken=${nextPageToken}`:''}`;
       const listResp = await fetch(url,{headers:{Authorization:`Bearer ${accessToken}`}});
       const list = await listResp.json();
       nextPageToken=list.nextPageToken||null;
-      if(!listResp.ok){ toast(`Gmail-Fehler: ${listResp.status}`); break; }
+
+      if(!listResp.ok){
+        toast(`Gmail-Fehler: ${listResp.status}`);
+        break;
+      }
       if(!list.messages?.length) break;
 
       for(const m of list.messages){
@@ -327,12 +332,14 @@ document.getElementById('gmailFetch').addEventListener('click', async ()=>{
         if(!(from.includes('qtrado')||from.includes('@qtrado.de'))) continue;
 
         const subject=headers.find(h=>h.name==='Subject')?.value||'';
-        let bodyText=''; const parts=msg.payload?.parts||[]; const plain=parts.find(p=>p.mimeType==='text/plain')||msg.payload;
+        let bodyText='';
+        const parts=msg.payload?.parts||[];
+        const plain=parts.find(p=>p.mimeType==='text/plain')||msg.payload;
         if(plain?.body?.data) bodyText=decodeB64Url(plain.body.data);
 
         let ok = await mergeParsedIntoStore( scanTextForFields(subject+'\n'+bodyText) );
 
-        // PDF-Anhänge parsen
+        // PDFs parsen
         const flatten = p => (p||[]).flatMap(x=> x?.parts ? flatten(x.parts) : [x]);
         const pdfParts = flatten(parts).filter(p=>p?.mimeType==='application/pdf');
         for(const p of pdfParts){
@@ -347,48 +354,37 @@ document.getElementById('gmailFetch').addEventListener('click', async ()=>{
         }
         if(ok) imported++;
       }
-      if(rounds>=5) nextPageToken=null; // Sicherheitslimit
+
+      // Sicherheitsbremse (max. 5 Seiten ≈ 2500 Mails)
+      if(rounds>=5) nextPageToken=null;
+
     }while(nextPageToken);
 
     toast(`Qtrado-E-Mails verarbeitet: ${imported}`);
   }catch(e){ console.error(e); toast('Gmail-Fehler: '+(e.message||e)); }
 });
 
-/* ===== 10) Einstellungen speichern ===== */
-document.getElementById('settingsSave').addEventListener('click', async ()=>{
-  const s={allowed1:document.getElementById('allowed1').value.trim(),allowed2:document.getElementById('allowed2').value.trim(),allowed3:document.getElementById('allowed3').value.trim(),keywords:document.getElementById('keywords').value.trim()||'Remission,Rechnung'};
-  await set(SETTINGS_KEY,s); toast('Einstellungen gespeichert ✅');
-});
-
-/* ===== 11) Init ===== */
+/* ===== 10) Init ===== */
 (async ()=>{
-  // Defaults sichern & Daten laden
-  await set(SETTINGS_KEY, await readSettings());
-  let d=await readStore(); d=pruneOld(d||{kundennummer:'',pakete:[],rechnungen:{}}); await writeStore(d);
-  const ta=document.getElementById('inputArea'); if(ta) ta.value=JSON.stringify(d,null,2);
+  // Tabs
+  const TABS=[...document.querySelectorAll('.tab')];
+  const VIEWS=[...document.querySelectorAll('section[data-view]')];
+  function setTab(name){TABS.forEach(t=>t.classList.toggle('active',t.dataset.tab===name)); VIEWS.forEach(v=>v.style.display=v.dataset.view===name?'':'none');}
+  TABS.forEach(t=>t.addEventListener('click',()=>setTab(t.dataset.tab)));
+  setTab('main');
+
+  // Startdaten
+  let d=await readStore(); d=pruneOld(d||{kundennummer:'',pakete:[]}); await writeStore(d);
+  document.getElementById('inputArea').value=JSON.stringify(d,null,2);
+
+  // Kdnr Dropdown füllen
+  const kset=new Set(); if(d.kundennummer) kset.add(String(d.kundennummer)); (d.pakete||[]).forEach(p=>{ if(p.kundennummer) kset.add(String(p.kundennummer)); });
+  const kdnrSelect=document.getElementById('kdnrSelect');
+  kdnrSelect.innerHTML='<option value="">Alle Kunden</option>'+Array.from(kset).sort().map(k=>`<option>${k}</option>`).join('');
+
   render(d);
   toast('App geladen ✅');
 })();
-
-/* ===== 12) Admin Login ===== */
-const ADMIN_USER = "admin";
-const ADMIN_PASS = "remi2025";
-document.getElementById("adminLink").addEventListener("click", e=>{
-  e.preventDefault();
-  document.getElementById("adminModal").style.display="flex";
-});
-document.getElementById("adminCancel").addEventListener("click", ()=>{
-  document.getElementById("adminModal").style.display="none";
-});
-document.getElementById("adminSubmit").addEventListener("click", ()=>{
-  const u=document.getElementById("adminUser").value.trim();
-  const p=document.getElementById("adminPass").value.trim();
-  if(u===ADMIN_USER && p===ADMIN_PASS){
-    document.getElementById("adminModal").style.display="none";
-    document.getElementById("adminDashboard").style.display="block";
-    toast("Admin Login erfolgreich ✅");
-  }else{
-    alert("❌ Falsche Zugangsdaten!");
-  }
-});
-</script>
+  </script>
+</body>
+</html>
