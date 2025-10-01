@@ -13,10 +13,11 @@
   <style>
     :root { --blue:#0a84ff; --muted:#666; }
     *{box-sizing:border-box}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:1rem auto;max-width:1150px;padding:0 1rem;background:#fff}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:1rem auto;max-width:1200px;padding:0 1rem;background:#fff}
     header{display:flex;gap:12px;align-items:center}
     h1{font-size:1.45rem;margin:.5rem 0}
     h2{margin:.7rem 0 .35rem}
+    h3{margin:.4rem 0}
     .muted{color:var(--muted);font-size:.95rem}
     .banner{margin:.75rem 0;padding:.6rem .8rem;border:1px solid #dbe5ff;background:#f4f7ff;border-radius:.6rem;color:#1a3daa}
     .pill{display:inline-block;padding:.2rem .5rem;border-radius:1rem;background:#eef3ff;color:#0a84ff;font-size:.85rem}
@@ -31,7 +32,7 @@
     .card{border:1px solid #e8e8e8;border-radius:.8rem;padding:.75rem .9rem;margin:.5rem 0;background:#fff}
     details summary{list-style:none;cursor:pointer}
     details summary::-webkit-details-marker{display:none}
-    .row{display:grid;grid-template-columns:120px 120px 1fr 120px;gap:.6rem;align-items:center}
+    .row{display:grid;grid-template-columns:120px 120px 1fr 140px;gap:.6rem;align-items:center}
     .chip{display:inline-block;border:1px solid #e0e0e0;border-radius:999px;padding:.15rem .5rem;font-size:.85rem;margin:.1rem .25rem 0 0}
     .toast{position:fixed;top:12px;right:12px;z-index:9999;background:#0a84ff;color:#fff;padding:.55rem .7rem;border-radius:.6rem;display:none}
     .totals{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;padding:.5rem .6rem;border:1px solid #eee;border-radius:.6rem;background:#fbfbfb;margin:.5rem 0}
@@ -46,7 +47,7 @@
   <!-- Libs -->
   <script src="https://cdn.jsdelivr.net/npm/idb-keyval@6/dist/idb-keyval-iife.min.js"></script>
 
-  <!-- PDF.js (fester Worker) -->
+  <!-- PDF.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
     window.pdfjsLib ||= window['pdfjs-dist/build/pdf'];
@@ -122,7 +123,17 @@
       <span class="badge" id="badgeSum">Summe: –</span>
     </div>
 
-    <div id="overview" class="list"></div>
+    <h2>3) Übersicht</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start">
+      <div>
+        <h3>Pakete</h3>
+        <div id="overviewPackages" class="list"></div>
+      </div>
+      <div>
+        <h3>Rechnungen</h3>
+        <div id="overviewInvoices" class="list"></div>
+      </div>
+    </div>
   </section>
 
   <!-- Einstellungen -->
@@ -189,13 +200,21 @@ TABS.forEach(t=>t.addEventListener('click',()=>setTab(t.dataset.tab)));
 /* ===== 3) Speicher (IndexedDB / localStorage) ===== */
 const __idb = window.idbKeyval || { get: async k=>JSON.parse(localStorage.getItem(k)||'null'), set: async (k,v)=>localStorage.setItem(k,JSON.stringify(v)), del: async k=>localStorage.removeItem(k) };
 const {get,set,del}=__idb;
-const KEY='presse-remi-daten-v10', SETTINGS_KEY='presse-remi-settings-v10';
-async function ensureShape(data){ data=data||{kundennummer:'',pakete:[],rechnungen:{}}; data.pakete ||= []; data.rechnungen ||= {}; return data; }
+const KEY='presse-remi-daten-v11', SETTINGS_KEY='presse-remi-settings-v10';
+async function ensureShape(data){
+  data=data||{kundennummer:'',pakete:[],rechnungen:{}};
+  data.pakete ||= [];
+  data.rechnungen ||= {};
+  for(const p of data.pakete){ p.files ||= []; p.positionen ||= []; p.rechnungen ||= []; p.differenzen ||= []; }
+  for(const k of Object.keys(data.rechnungen)){ data.rechnungen[k].files ||= []; data.rechnungen[k].items ||= []; }
+  return data;
+}
 const readStore=async()=> ensureShape(await get(KEY));
 const writeStore=async(o)=> set(KEY, await ensureShape(o));
 const readSettings=()=>get(SETTINGS_KEY).then(x=>x||{allowed1:'',allowed2:'',allowed3:'',keywords:'Remission,Rechnung'});
 
 /* ===== 4) Utils ===== */
+const $=sel=>document.querySelector(sel);
 const toast=m=>{const el=document.getElementById('toast');el.textContent=m;el.style.display='block';setTimeout(()=>el.style.display='none',2500);};
 const norm=s=>(s||'').toString().toLowerCase();
 const parseDateAny=s=>s && /^\d{4}-\d{2}-\d{2}$/.test(s)?new Date(s+'T00:00:00'):null;
@@ -218,16 +237,16 @@ function scanTextForFields(t){
   const isInvoice = /rechnung|rechnungsnummer|rg[- :]?\d+/i.test(t) && !/gutschrift/i.test(t);
   const isRemi    = /remission|remi[- ]?liste|rückgabe|gutschrift/i.test(t) || !isInvoice;
 
+  // Artikelzeilen (ein-/zweizeilig)
   const lines = t.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
   const asNumber = s => { if(!s) return null; s=s.replace(/\s/g,'').replace(/\./g,'').replace(/,/g,'.'); const v=parseFloat(s); return isFinite(v)?v:null; };
-
   const items=[];
   for(let i=0;i<lines.length;i++){
     const L=lines[i];
-    // Eine Zeile: CODE  TITLE  QTY  UNIT  TOTAL
+    // Einzeilig
     let m = L.match(/^(\d{8,14}|[A-Z0-9][A-Z0-9._-]{2,})\s+(.+?)\s+(\d{1,6})\s+(\d+[.,]\d{2})\s+(\d+[.,]\d{2})$/i);
     if(m){ const [_, code, title, qty, unit, total]=m; items.push({code, title, qty:+qty, unit:asNumber(unit), total:asNumber(total)}); continue; }
-    // Zweizeilig: CODE  TITLE  /  QTY x UNIT = TOTAL
+    // Zweizeilig
     let m1=L.match(/^(\d{8,14}|[A-Z0-9][A-Z0-9._-]{2,})\s+(.+)$/i);
     if(m1 && i+1<lines.length){
       const L2=lines[i+1];
@@ -251,7 +270,7 @@ async function pdfBlobToText(blob){
   return t;
 }
 
-/* ===== 6) Abgleich & Zusammenführen ===== */
+/* ===== 6) Abgleich (Remi ↔ Rechnung) ===== */
 function diffItems(remiItems, invItems){
   const idx = arr => {
     const map=new Map();
@@ -276,13 +295,25 @@ function diffItems(remiItems, invItems){
   return {missing, extra, mismatch};
 }
 
-async function mergeParsedIntoStore(parsed){
+/* ===== 7) Datei-Referenzen speichern (für PDF-Öffnen) ===== */
+function addFileRefToPackage(data, paketNr, fileObj){
+  let p = (data.pakete||[]).find(x=>x.nr===paketNr);
+  if(!p){ p={nr:paketNr||'unbekannt', datum:'', status:'offen', rechnungen:[], positionen:[], differenzen:[], files:[]}; data.pakete.push(p); }
+  p.files ||= []; p.files.push(fileObj);
+}
+function addFileRefToInvoice(data, rgNr, fileObj){
+  const r = (data.rechnungen[rgNr] ||= {nr:rgNr, datum:'', items:[], files:[]});
+  r.files ||= []; r.files.push(fileObj);
+}
+
+/* ===== 8) Merge + Abgleich + Dateilinks ===== */
+async function mergeParsedIntoStore(parsed, fileRef){
   let data = await readStore(); data = await ensureShape(data);
 
-  // Rechnungen global sammeln
+  // Rechnungen global
   if(parsed.type==='invoice' && parsed.rechnungen?.length){
     for(const rg of parsed.rechnungen){
-      const r=data.rechnungen[rg] || {nr:rg, datum:parsed.datum||'', items:[]};
+      const r=data.rechnungen[rg] || {nr:rg, datum:parsed.datum||'', items:[], files:[]};
       if(parsed.items?.length){
         const seen=new Set(r.items.map(x=>x.code+'|'+x.title));
         for(const it of parsed.items){
@@ -291,14 +322,15 @@ async function mergeParsedIntoStore(parsed){
         }
       }
       if(parsed.datum && !r.datum) r.datum = parsed.datum;
+      if(fileRef) addFileRefToInvoice(data, rg, fileRef);
       data.rechnungen[rg]=r;
     }
   }
 
-  // Paket erzeugen/füllen
+  // Paket
   if(parsed.paket || parsed.kdnr || parsed.items?.length){
     let p = parsed.paket ? (data.pakete||[]).find(x=>x.nr===parsed.paket) : null;
-    if(!p){ p={nr:parsed.paket||'unbekannt', datum:parsed.datum||'', status:'offen', rechnungen:[], positionen:[], differenzen:[]}; data.pakete.push(p); }
+    if(!p){ p={nr:parsed.paket||'unbekannt', datum:parsed.datum||'', status:'offen', rechnungen:[], positionen:[], differenzen:[], files:[]}; data.pakete.push(p); }
     if(parsed.kdnr){ p.kundennummer = parsed.kdnr; }
     if(parsed.datum && !p.datum){ p.datum = parsed.datum; }
 
@@ -312,9 +344,10 @@ async function mergeParsedIntoStore(parsed){
     if(parsed.type==='invoice' && parsed.rechnungen?.length){
       for(const rg of parsed.rechnungen){ if(!p.rechnungen.includes(rg)) p.rechnungen.push(rg); }
     }
+    if(fileRef && parsed.paket){ addFileRefToPackage(data, parsed.paket, fileRef); }
   }
 
-  // Abgleich je Paket ↔ Rechnung
+  // Abgleich je Paket ↔ Rechnung(en)
   for(const p of data.pakete){
     p.differenzen=[];
     for(const rg of (p.rechnungen||[])){
@@ -322,63 +355,82 @@ async function mergeParsedIntoStore(parsed){
       const diffs=diffItems(p.positionen||[], r.items||[]);
       p.differenzen.push({rg, ...diffs});
       const hasIssues = diffs.missing.length || diffs.extra.length || diffs.mismatch.length;
-      if(hasIssues) p.status='fehlt'; else if(p.status==='fehlt') p.status='offen';
+      if(hasIssues) p.status='abweichung'; else if(p.status==='abweichung') p.status='offen';
     }
   }
 
   data = pruneOld(data);
   await writeStore(data);
-  const ta=document.getElementById('inputArea'); if(ta) ta.value=JSON.stringify(data,null,2);
+  if($('#inputArea')) $('#inputArea').value=JSON.stringify(data,null,2);
   render(data);
   return true;
 }
 
-/* ===== 7) UI / Render ===== */
-const overview=document.getElementById('overview'), inputArea=document.getElementById('inputArea');
-const kdnrSelect=document.getElementById('kdnrSelect'), searchInput=document.getElementById('searchInput');
-const dateFrom=document.getElementById('dateFrom'), dateTo=document.getElementById('dateTo');
-const totals=document.getElementById('totals'), badgeCount=document.getElementById('badgeCount'), badgeMissing=document.getElementById('badgeMissing'), badgeSum=document.getElementById('badgeSum');
+/* ===== 9) Render: getrennte Listen + PDF-Links ===== */
+const inputArea=$('#inputArea'), kdnrSelect=$('#kdnrSelect'), searchInput=$('#searchInput');
+const dateFrom=$('#dateFrom'), dateTo=$('#dateTo'), totals=$('#totals');
+const badgeCount=$('#badgeCount'), badgeMissing=$('#badgeMissing'), badgeSum=$('#badgeSum');
 let onlyMissing=false;
 
-function fillKdnrDropdown(kdnrs){ const cur=kdnrSelect.value; kdnrSelect.innerHTML='<option value="">Alle Kunden</option>'+kdnrs.map(k=>`<option>${k}</option>`).join(''); if(cur && kdnrs.includes(cur)) kdnrSelect.value=cur; }
 function computeStats(data){
   const list=data.pakete||[]; 
   const abw=list.filter(p=>(p.differenzen||[]).some(d=>d.missing?.length||d.extra?.length||d.mismatch?.length)).length;
   const sum=list.reduce((a,p)=>a+(typeof p.summe==='number'?p.summe:0),0);
   return {pakete:list.length, abw, sum};
 }
-function rowHtml(p,k){
-  const re=(p.rechnungen||[]).map(r=>`<span class="chip" style="${chipStyleFor(r)}">RG ${r}</span>`).join('');
-  const detail = (p.differenzen||[]).map(d=>{
-    const miss = (d.missing||[]).map(m=>{ const [code,title]=String(m.key).split('|'); return `<li>❌ fehlt: <b>${code||''}</b> – ${title||''} (erwartet ${m.expected?.qty??'?'})</li>`; }).join('');
-    const extra = (d.extra||[]).map(e=>{ const [code,title]=String(e.key).split('|'); return `<li>➕ extra: <b>${code||''}</b> – ${title||''} (Rechn. ${e.found?.qty??'?'})</li>`; }).join('');
+function filesHtml(files){
+  files=files||[];
+  if(!files.length) return '<span class="muted">keine PDF</span>';
+  return files.map((f,i)=>`<a href="${f.url}" target="_blank" rel="noopener">PDF ${i+1}</a>`).join(' • ');
+}
+function pkgRowHtml(p,k){
+  const hasIssues = (p.differenzen||[]).some(x=>x.missing?.length||x.extra?.length||x.mismatch?.length);
+  const re=(p.rechnungen||[]).map(r=>`<a href="#" data-open-rg="${r}" class="chip" style="${chipStyleFor(r)}" title="Rechnung öffnen">${r}</a>`).join('');
+  const diffs = (p.differenzen||[]).map(d=>{
+    const miss = (d.missing||[]).map(m=>{ const [code,title]=String(m.key).split('|'); return `<li>❌ fehlt: <b>${code||''}</b> – ${title||''} (Remi erwartet ${m.expected?.qty??'?'})</li>`; }).join('');
+    const extra = (d.extra||[]).map(e=>{ const [code,title]=String(e.key).split('|'); return `<li>➕ extra: <b>${code||''}</b> – ${title||''} (nur auf Rechnung: ${e.found?.qty??'?'})</li>`; }).join('');
     const mm = (d.mismatch||[]).map(x=>{ const [code,title]=String(x.key).split('|'); return `<li>⚖️ Menge abw.: <b>${code||''}</b> – ${title||''} (Remi ${x.remiQty??'?'}, Rechn. ${x.invQty??'?'})</li>`; }).join('');
     const ok = (!miss && !extra && !mm) ? '<div class="muted">✓ Abgleich ok</div>' : '';
-    return `<div class="card" style="margin:.4rem 0;padding:.5rem .7rem;border-color:${colorFor(d.rg)}">
-      <div class="muted" style="margin-bottom:.25rem">Abgleich zu RG <b style="color:${colorFor(d.rg)}">${d.rg}</b></div>
+    return `<div class="card" style="margin:.35rem 0;padding:.45rem .6rem;border-left:4px solid ${colorFor(d.rg)}">
+      <div class="muted" style="margin-bottom:.2rem">Abgleich zu RG <b style="color:${colorFor(d.rg)}">${d.rg}</b></div>
       ${ok || `<ul style="margin:.2rem 0 .2rem 1rem">${miss}${extra}${mm}</ul>`}
     </div>`;
   }).join('') || '<div class="muted">Keine Abgleiche</div>';
 
-  const hasIssues = (p.differenzen||[]).some(x=>x.missing?.length||x.extra?.length||x.mismatch?.length);
+  const firstPdf = (p.files&&p.files[0]) ? p.files[0].url : null;
 
   return `<details class="card" ${hasIssues?'open':''}>
-    <summary>
-      <div class="row">
-        <div><b>Paket ${p.nr||''}</b></div>
-        <div class="muted">${p.datum||''}</div>
-        <div>${re||'<span class="muted">–</span>'}</div>
-        <div class="muted" style="color:${hasIssues?'#c00':'inherit'}">${hasIssues?'abweichung':(p.status||'')}</div>
-      </div>
-      <div class="muted">Kdnr ${k||''}</div>
+    <summary class="row">
+      <div><a href="${firstPdf||'#'}" ${firstPdf?'target="_blank" rel="noopener"':''} class="pkg-link" data-paket="${p.nr}"><b>Paket ${p.nr||''}</b></a></div>
+      <div class="muted">${p.datum||''}</div>
+      <div>${re||'<span class="muted">–</span>'}</div>
+      <div class="muted" style="color:${hasIssues?'#c00':'inherit'}">${hasIssues?'abweichung':(p.status||'')}</div>
     </summary>
-    ${detail}
+    <div style="margin:.4rem 0 .2rem"><b>PDFs:</b> ${filesHtml(p.files)}</div>
+    ${diffs}
+  </details>`;
+}
+function invRowHtml(r){
+  const firstPdf = (r.files&&r.files[0]) ? r.files[0].url : null;
+  const items = (r.items||[]).slice(0,12).map(it=>`<li><b>${it.code||''}</b> – ${it.title||''} • Menge: ${it.qty??''}</li>`).join('');
+  return `<details class="card">
+    <summary class="row">
+      <div><a href="${firstPdf||'#'}" ${firstPdf?'target="_blank" rel="noopener"':''} class="rg-link" data-rg="${r.nr}"><b>RG ${r.nr}</b></a></div>
+      <div class="muted">${r.datum||''}</div>
+      <div>${filesHtml(r.files)}</div>
+      <div class="muted">Positionen: ${(r.items||[]).length}</div>
+    </summary>
+    ${ items ? `<ul style="margin:.4rem 0 .2rem 1rem">${items}${(r.items||[]).length>12?'<li class="muted">…</li>':''}</ul>` : '<div class="muted">Keine Positionen erkannt</div>'}
   </details>`;
 }
 function render(data){
-  const gk=data.kundennummer||''; const listAll=(data.pakete||[]).map(p=>({...p,_k:p.kundennummer||gk}));
-  const q=norm(searchInput?.value), ksel=kdnrSelect?.value, f=dateFrom?.value, t=dateTo?.value;
-  const list=listAll.filter(p=>{
+  // Filter
+  const gk=data.kundennummer||''; 
+  const q=norm($('#searchInput')?.value), ksel=$('#kdnrSelect')?.value, f=$('#dateFrom')?.value, t=$('#dateTo')?.value;
+
+  // Pakete
+  const allPkgs=(data.pakete||[]).map(p=>({...p,_k:p.kundennummer||gk}));
+  const pkgs=allPkgs.filter(p=>{
     const d=parseDateAny(p.datum);
     const issues=(p.differenzen||[]).some(x=>x.missing?.length||x.extra?.length||x.mismatch?.length);
     return (!ksel || p._k===ksel)
@@ -386,31 +438,88 @@ function render(data){
       && (!onlyMissing || issues)
       && (!f && !t ? true : (d && (!f || d>=new Date(f+'T00:00:00')) && (!t || d<=new Date(t+'T23:59:59'))));
   });
-  overview.innerHTML = list.length ? list.map(p=>rowHtml(p,p._k)).join('') : '<div class="muted">Keine Treffer…</div>';
-  const s=computeStats({pakete:list}); if(list.length){totals.hidden=false;badgeCount.textContent=`${s.pakete} Pakete`;badgeMissing.textContent=`${s.abw} abweichend`;badgeSum.textContent=`Summe: ${fmtEuro(s.sum)}`;} else totals.hidden=true;
-  const box=document.getElementById('statsBox'); if(box){ const all=computeStats(data); box.textContent=`Pakete: ${all.pakete} • Abweichend: ${all.abw} • Summe: ${fmtEuro(all.sum)}`; }
 
-  // Dropdown Kundennummern
+  // Rechnungen
+  const invAll = Object.values(data.rechnungen||{});
+  const invs = invAll.filter(r=>{
+    const d=parseDateAny(r.datum);
+    return (!q || [r.nr,r.datum,(r.items||[]).map(x=>x.title).join(' ')].some(x=>norm(String(x)).includes(q)))
+      && (!f && !t ? true : (d && (!f || d>=new Date(f+'T00:00:00')) && (!t || d<=new Date(t+'T23:59:59'))));
+  });
+
+  // Render
+  $('#overviewPackages').innerHTML = pkgs.length ? pkgs.map(p=>pkgRowHtml(p,p._k)).join('') : '<div class="muted">Keine Pakete…</div>';
+  $('#overviewInvoices').innerHTML = invs.length ? invs.map(invRowHtml).join('') : '<div class="muted">Keine Rechnungen…</div>';
+
+  // Summen
+  const s=computeStats({pakete:pkgs}); 
+  if(pkgs.length){ totals.hidden=false; badgeCount.textContent=`${s.pakete} Pakete`; badgeMissing.textContent=`${s.abw} abweichend`; badgeSum.textContent=`Summe: ${fmtEuro(s.sum)}`; } 
+  else { totals.hidden=true; }
+
+  // Kdnr-Dropdown
   const kset=new Set(); if(data.kundennummer) kset.add(String(data.kundennummer)); (data.pakete||[]).forEach(p=>{ if(p.kundennummer) kset.add(String(p.kundennummer)); });
-  fillKdnrDropdown(Array.from(kset).sort());
+  const cur=kdnrSelect.value; kdnrSelect.innerHTML='<option value="">Alle Kunden</option>'+Array.from(kset).sort().map(k=>`<option>${k}</option>`).join('');
+  if(cur && Array.from(kset).includes(cur)) kdnrSelect.value=cur;
+
+  // Klick-Handler für RG-Chips (in Paketkarte → Rechnung öffnen)
+  document.querySelectorAll('[data-open-rg]').forEach(a=>{
+    a.addEventListener('click',e=>{
+      e.preventDefault();
+      const rg=a.getAttribute('data-open-rg');
+      const r=(data.rechnungen||{})[rg];
+      if(r?.files?.length){ window.open(r.files[0].url,'_blank','noopener'); }
+      else toast('Zu dieser Rechnung ist keine PDF verknüpft.');
+    });
+  });
 }
 
-/* ===== 8) Datei-Import (JSON/EML/PDF, Drag&Drop) ===== */
-document.getElementById('importBtn').addEventListener('click',()=>document.getElementById('importFile').click());
-document.getElementById('importFile').addEventListener('change',async e=>{for(const f of Array.from(e.target.files||[])) await handleFile(f); e.target.value='';});
+/* ===== 10) Datei-Import (JSON/EML/PDF, Drag&Drop) ===== */
+$('#importBtn').addEventListener('click',()=>$('#importFile').click());
+$('#importFile').addEventListener('change',async e=>{for(const f of Array.from(e.target.files||[])) await handleFile(f); e.target.value='';});
 const dropZone=document.getElementById('dropZone');
 ['dragenter','dragover'].forEach(ev=>dropZone.addEventListener(ev,e=>{e.preventDefault(); dropZone.style.background='#eef3ff';}));
 ['dragleave','drop'].forEach(ev=>dropZone.addEventListener(ev,e=>{e.preventDefault(); dropZone.style.background='#f8faff';}));
 dropZone.addEventListener('drop', async e=>{for(const f of Array.from(e.dataTransfer.files||[])) await handleFile(f);});
+
 async function handleFile(file){
   const name=(file.name||'').toLowerCase();
-  if(name.endsWith('.json')){ const obj=JSON.parse(await file.text()); await writeStore(pruneOld(obj)); inputArea.value=JSON.stringify(await readStore(),null,2); toast('JSON importiert ✅'); render(await readStore()); return; }
-  if(name.endsWith('.eml')){ const raw=await file.text(); const subj=(raw.match(/^Subject:\s*(.+)$/mi)||[])[1]||''; const body=raw.split(/\r?\n\r?\n/).slice(1).join('\n'); await mergeParsedIntoStore(scanTextForFields(subj+'\n'+body)); toast('EML importiert ✅'); return; }
-  if(name.endsWith('.pdf')){ const text=await pdfBlobToText(file); await mergeParsedIntoStore(scanTextForFields(text)); toast('PDF importiert ✅'); return; }
+
+  if(name.endsWith('.json')){
+    const obj=JSON.parse(await file.text());
+    await writeStore(pruneOld(obj));
+    inputArea.value=JSON.stringify(await readStore(),null,2);
+    toast('JSON importiert ✅'); render(await readStore());
+    return;
+  }
+
+  if(name.endsWith('.eml')){
+    const raw=await file.text();
+    const subj=(raw.match(/^Subject:\s*(.+)$/mi)||[])[1]||'';
+    const body=raw.split(/\r?\n\r?\n/).slice(1).join('\n');
+    const parsed = scanTextForFields(subj+'\n'+body);
+    await mergeParsedIntoStore(parsed, null);
+    toast('EML importiert ✅'); return;
+  }
+
+  if(name.endsWith('.pdf')){
+    const url = URL.createObjectURL(file); // gilt bis Tab-Reload
+    const text=await pdfBlobToText(file);
+    const parsed = scanTextForFields(text);
+
+    const fileRef = {name:file.name, url, type:'pdf', source:'upload'};
+    if(parsed.rechnungen?.length){
+      for(const rg of parsed.rechnungen){ let d=await readStore(); d=await ensureShape(d); addFileRefToInvoice(d, rg, fileRef); await writeStore(d); }
+    }
+    if(parsed.paket){ let d=await readStore(); d=await ensureShape(d); addFileRefToPackage(d, parsed.paket, fileRef); await writeStore(d); }
+
+    await mergeParsedIntoStore(parsed, fileRef);
+    toast('PDF importiert ✅'); return;
+  }
+
   toast('Dateityp nicht unterstützt');
 }
 
-/* ===== 9) Export (JSON/CSV/PDF/Diff-CSV) ===== */
+/* ===== 11) Export (JSON/CSV/PDF/Diff-CSV) ===== */
 function exportJSONdata(data){ const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remi-export.json'; a.click(); }
 function exportCSV(data){
   const rows=[['Kdnr','Paket','Datum','Status','Rechnungen','Summe']];
@@ -434,7 +543,7 @@ function exportDiffCSV(data){
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remi-differenzen.csv'; a.click();
 }
 
-/* ===== 10) Buttons & Events ===== */
+/* ===== 12) Buttons & Filter ===== */
 document.getElementById('forceUpdate').addEventListener('click', async ()=>{try{if('serviceWorker' in navigator){const r=await navigator.serviceWorker.getRegistrations();for(const x of r) await x.unregister();} if('caches' in window){const k=await caches.keys();await Promise.all(k.map(c=>caches.delete(c)));}}catch(e){} toast('Update erzwungen – neu laden…'); setTimeout(()=>location.reload(true),600);});
 document.getElementById('toggleMissing').addEventListener('click', async ()=>{ onlyMissing=!onlyMissing; toast(onlyMissing?'Nur abweichende…':'Alle anzeigen'); render(await readStore()); });
 document.getElementById('clearSearch').addEventListener('click', async ()=>{ searchInput.value=''; dateFrom.value=''; dateTo.value=''; toast('Filter zurückgesetzt'); render(await readStore()); });
@@ -448,7 +557,7 @@ document.getElementById('exportPdf').addEventListener('click', async ()=>exportP
 document.getElementById('exportDiffCsv').addEventListener('click', async ()=>exportDiffCSV(await readStore()));
 document.getElementById('settingsSave').addEventListener('click', async ()=>{ const s={allowed1:document.getElementById('allowed1').value.trim(),allowed2:document.getElementById('allowed2').value.trim(),allowed3:document.getElementById('allowed3').value.trim(),keywords:document.getElementById('keywords').value.trim()||'Remission,Rechnung'}; await set(SETTINGS_KEY,s); toast('Einstellungen gespeichert ✅'); });
 
-/* ===== 11) Gmail Login & Abruf (Qtrado, 365d, inkl. PDF-Anhänge) ===== */
+/* ===== 13) Gmail: Verbinden & Abrufen (nur Qtrado, inkl. PDF-Verknüpfung) ===== */
 document.getElementById('gmailConnect').addEventListener('click',()=>{
   if(!window.google?.accounts?.oauth2){ toast("Google API nicht geladen – neu laden"); return; }
   gisClient=google.accounts.oauth2.initTokenClient({
@@ -471,9 +580,11 @@ document.getElementById('gmailFetch').addEventListener('click', async ()=>{
     toast('Suche: '+baseQ);
 
     let imported=0, nextPageToken=null, rounds=0;
+    const flatten = p => (p||[]).flatMap(x=> x?.parts ? flatten(x.parts) : [x]);
+
     do{
       rounds++;
-      const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(baseQ)}&maxResults=500${nextPageToken?`&pageToken=${nextPageToken}`:''}`;
+      const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(baseQ)}&maxResults=200${nextPageToken?`&pageToken=${nextPageToken}`:''}`;
       const listResp = await fetch(url,{headers:{Authorization:`Bearer ${accessToken}`}});
       const list = await listResp.json();
       nextPageToken=list.nextPageToken||null;
@@ -490,10 +601,10 @@ document.getElementById('gmailFetch').addEventListener('click', async ()=>{
         let bodyText=''; const parts=msg.payload?.parts||[]; const plain=parts.find(p=>p.mimeType==='text/plain')||msg.payload;
         if(plain?.body?.data) bodyText=decodeB64Url(plain.body.data);
 
-        let ok = await mergeParsedIntoStore( scanTextForFields(subject+'\n'+bodyText) );
+        const baseParsed = scanTextForFields(subject+'\n'+bodyText);
+        let ok = await mergeParsedIntoStore(baseParsed, null);
 
-        // PDFs parsen
-        const flatten = p => (p||[]).flatMap(x=> x?.parts ? flatten(x.parts) : [x]);
+        // PDFs holen + verknüpfen
         const pdfParts = flatten(parts).filter(p=>p?.mimeType==='application/pdf');
         for(const p of pdfParts){
           const attId=p.body?.attachmentId; if(!attId) continue;
@@ -501,32 +612,37 @@ document.getElementById('gmailFetch').addEventListener('click', async ()=>{
           if(!att.data) continue;
           const bin = Uint8Array.from(decodeB64Url(att.data), c=>c.charCodeAt(0));
           const blob = new Blob([bin],{type:'application/pdf'});
+          const url = URL.createObjectURL(blob); // gilt bis Tab-Reload
           const text = await pdfBlobToText(blob);
-          const ok2 = await mergeParsedIntoStore( scanTextForFields(text) );
+          const parsed = scanTextForFields(text);
+
+          const fileRef = {name:(p.filename||'Anhang.pdf'), url, type:'pdf', source:'gmail'};
+          if(parsed.rechnungen?.length){ for(const rg of parsed.rechnungen){ let d=await readStore(); d=await ensureShape(d); addFileRefToInvoice(d, rg, fileRef); await writeStore(d); } }
+          if(parsed.paket){ let d=await readStore(); d=await ensureShape(d); addFileRefToPackage(d, parsed.paket, fileRef); await writeStore(d); }
+
+          const ok2 = await mergeParsedIntoStore(parsed, fileRef);
           ok = ok || ok2;
         }
         if(ok) imported++;
       }
-      if(rounds>=5) nextPageToken=null; // Sicherheitslimit (~2500 Mails)
+      if(rounds>=6) nextPageToken=null; // ~1200 Mails Safety
     }while(nextPageToken);
 
     toast(`Qtrado-E-Mails verarbeitet: ${imported}`);
   }catch(e){ console.error(e); toast('Gmail-Fehler: '+(e.message||e)); }
 });
 
-/* ===== 12) Init ===== */
+/* ===== 14) Init ===== */
 (async ()=>{
   setTab('main');
-  await set(SETTINGS_KEY, await readSettings()); // Defaults sichern
+  await set(SETTINGS_KEY, await readSettings());
   let d=await readStore(); d=pruneOld(d||{kundennummer:'',pakete:[],rechnungen:{}}); await writeStore(d);
-  inputArea.value=JSON.stringify(d,null,2);
-  const kset=new Set(); if(d.kundennummer) kset.add(String(d.kundennummer)); (d.pakete||[]).forEach(p=>{ if(p.kundennummer) kset.add(String(p.kundennummer)); });
-  fillKdnrDropdown(Array.from(kset).sort());
+  if($('#inputArea')) $('#inputArea').value=JSON.stringify(d,null,2);
   render(d);
   toast('App geladen ✅');
 })();
 
-/* ===== 13) Admin Login ===== */
+/* ===== 15) Admin Login ===== */
 const ADMIN_USER = "admin";
 const ADMIN_PASS = "remi2025";
 document.getElementById("adminLink").addEventListener("click", e=>{
