@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Presse Remi – Abgleich | Version 26.0.0 | Made by Durdu 2025 -->
+<!-- Presse Remi – Abgleich | Version 26.1.0 | Made by Durdu 2025 -->
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
@@ -7,832 +7,114 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Presse Remi – Abgleich v26.0.0</title>
-  <meta name="theme-color" content="#0a84ff">
-
-  <style>
-    :root { --blue:#0a84ff; --muted:#666; }
-    *{box-sizing:border-box}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:1rem auto;max-width:1200px;padding:0 1rem;background:#fff}
-    header{display:flex;gap:12px;align-items:center}
-    h1{font-size:1.45rem;margin:.5rem 0}
-    .version{font-size:.8em;color:#666;margin-left:.5rem}
-    h2{margin:.7rem 0 .35rem}
-    h3{margin:.4rem 0}
-    .muted{color:var(--muted);font-size:.95rem}
-    .banner{margin:.75rem 0;padding:.6rem .8rem;border:1px solid #dbe5ff;background:#f4f7ff;border-radius:.6rem;color:#1a3daa}
-    .pill{display:inline-block;padding:.2rem .5rem;border-radius:1rem;background:#eef3ff;color:#0a84ff;font-size:.85rem}
-    .tabs{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem}
-    .tab{padding:.45rem .7rem;border:1px solid #d0d0d0;border-radius:.6rem;cursor:pointer}
-    .tab.active{background:#0a84ff;color:#fff;border-color:#0a84ff}
-    button{padding:.55rem .85rem;border-radius:.6rem;border:1px solid #d0d0d0;background:#fff;cursor:pointer}
-    button.primary{background:#0a84ff;color:#fff;border-color:#0a84ff}
-    textarea{width:100%;min-height:160px;border:1px solid #d0d0d0;border-radius:.6rem;padding:.6rem;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-    input[type="text"],input[type="date"],select{padding:.5rem .65rem;border:1px solid #d0d0d0;border-radius:.6rem}
-    .list{margin-top:.6rem}
-    .card{border:1px solid #e8e8e8;border-radius:.8rem;padding:.75rem .9rem;margin:.5rem 0;background:#fff}
-    details summary{list-style:none;cursor:pointer}
-    details summary::-webkit-details-marker{display:none}
-    .row{display:grid;grid-template-columns:120px 120px 1fr 160px;gap:.6rem;align-items:center}
-    .chip{display:inline-block;border:1px solid #e0e0e0;border-radius:999px;padding:.15rem .5rem;font-size:.85rem;margin:.1rem .25rem 0 0}
-    .toast{position:fixed;top:12px;right:12px;z-index:9999;background:#0a84ff;color:#fff;padding:.55rem .7rem;border-radius:.6rem;display:none}
-    .totals{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;padding:.5rem .6rem;border:1px solid #eee;border-radius:.6rem;background:#fbfbfb;margin:.5rem 0}
-    .totals .badge{padding:.2rem .5rem;border:1px solid #e0e0e0;border-radius:999px}
-    .drop{border:2px dashed #c9d1e6;border-radius:.6rem;padding:10px;background:#f8faff}
-    .actions{display:flex;gap:.5rem;flex-wrap:wrap;margin:.6rem 0}
-    footer{margin-top:2rem;padding:1rem 0;border-top:1px solid #ddd;display:flex;justify-content:space-between;align-items:center;font-size:.9rem;color:#666}
-    a{color:#0a84ff;text-decoration:none}
-    a:hover{text-decoration:underline}
-    .alert{display:none;margin:.6rem 0;padding:.6rem .8rem;border:1px solid #ffd6d6;background:#fff2f2;color:#a40000;border-radius:.6rem}
-    .alert b{color:#a40000}
-  </style>
-
-  <!-- IndexedDB helper -->
-  <script src="https://cdn.jsdelivr.net/npm/idb-keyval@6/dist/idb-keyval-iife.min.js"></script>
-
-  <!-- PDF.js -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script>
-    window.pdfjsLib ||= window['pdfjs-dist/build/pdf'];
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-  </script>
-
-  <!-- Export libs -->
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
-
-  <!-- Google Identity Services -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <title>Presse Remi – Abgleich v26.1.0</title>
 </head>
 <body>
-  <div id="toast" class="toast"></div>
+  <h1>Presse Remi – Abgleich <span style="font-size:.8em;color:#666">v26.1.0</span></h1>
+  <div id="overviewPackages"></div>
+  <div id="overviewInvoices"></div>
+  <footer>Made by Durdu 2025 – Version 26.1.0</footer>
 
-  <header>
-    <div>
-      <h1>
-        Presse Remi – Abgleich
-        <span class="version">v26.0.0</span>
-      </h1>
-      <div class="muted">Lokale Speicherung. Offline nutzbar.</div>
-      <div class="banner">ℹ️ Rechnungen & Remissionen werden nur <u>3 Monate</u> intern gespeichert. Ältere Einträge werden automatisch gelöscht.</div>
-      <div id="alertBox" class="alert"></div>
-    </div>
-    <div style="margin-left:auto;display:flex;gap:.5rem;align-items:center;">
-      <button id="forceUpdate">Update erzwingen</button>
-      <span class="pill">Vollversion</span>
-    </div>
-  </header>
+<script>
+const APP_VERSION = "26.1.0";
 
-  <div class="tabs">
-    <div class="tab active" data-tab="main">Übersicht</div>
-    <div class="tab" data-tab="settings">Einstellungen</div>
-    <div class="tab" data-tab="stats">Statistik</div>
-  </div>
+/* ===== Utils ===== */
+const toast = m => { alert(m); };
 
-  <!-- Übersicht -->
-  <section data-view="main">
-    <h2>1) Daten eingeben</h2>
-    <p class="muted">Option A: JSON einfügen • Option B: Datei importieren (PDF, EML, JSON) • Option C: per Gmail abrufen (nur Qtrado).</p>
-    <textarea id="inputArea" placeholder='{"kundennummer":"","pakete": [], "rechnungen": {}}'></textarea>
-    <div class="actions">
-      <button id="saveBtn" class="primary">Speichern</button>
-      <button id="loadBtn">Laden</button>
-      <button id="clearBtn">Löschen</button>
-      <button id="exportCsv">CSV</button>
-      <button id="exportPdf">PDF</button>
-      <button id="exportJson">JSON</button>
-      <button id="exportDiffCsv">Diff-CSV</button>
-      <label>
-        <input id="importFile" type="file" accept=".json,.eml,application/pdf" style="display:none">
-        <button id="importBtn">Import Datei</button>
-      </label>
-      <span style="flex:1"></span>
-      <button id="gmailConnect">Gmail verbinden</button>
-      <button id="gmailFetch" disabled>E-Mails abrufen (Qtrado)</button>
-    </div>
-
-    <div class="drop" id="dropZone">Oder Datei per Drag&Drop hier ablegen</div>
-
-    <h2>2) Filter</h2>
-    <div class="actions">
-      <select id="kdnrSelect"><option value="">Alle Kunden</option></select>
-      <input id="searchInput" placeholder="Suchen… (Paket, Rechnung, Datum, Filiale)">
-      <label>Von <input id="dateFrom" type="date"></label>
-      <label>Bis <input id="dateTo" type="date"></label>
-      <button id="toggleMissing">Nur abweichende anzeigen</button>
-      <button id="clearSearch">Leeren</button>
-    </div>
-
-    <div id="totals" class="totals" hidden>
-      <span class="badge" id="badgeCount">0 Pakete</span>
-      <span class="badge" id="badgeMissing">0 abweichend</span>
-      <span class="badge" id="badgeSum">Summe: –</span>
-    </div>
-
-    <h2>3) Übersicht</h2>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start">
-      <div>
-        <h3>Pakete</h3>
-        <div id="overviewPackages" class="list"></div>
-      </div>
-      <div>
-        <h3>Rechnungen</h3>
-        <div id="overviewInvoices" class="list"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Einstellungen -->
-  <section data-view="settings" style="display:none;">
-    <h2>Einstellungen</h2>
-    <div style="display:grid;grid-template-columns:180px 1fr;gap:.5rem .75rem;max-width:720px;">
-      <div>Erlaubter Absender 1</div><input id="allowed1" placeholder="z.B. remi@qtrado.de">
-      <div>Erlaubter Absender 2</div><input id="allowed2" placeholder="optional">
-      <div>Erlaubter Absender 3</div><input id="allowed3" placeholder="optional">
-      <div>Suchwörter</div><input id="keywords" placeholder="z.B. Remission, Rechnung" value="Remission,Rechnung">
-      <div></div><button id="settingsSave" class="primary">Speichern</button>
-    </div>
-    <p class="muted">Standard: es werden nur Absender mit „@qtrado.de“ verarbeitet.</p>
-  </section>
-
-  <!-- Statistik -->
-  <section data-view="stats" style="display:none;">
-    <h2>Statistik</h2>
-    <div id="statsBox" class="card"></div>
-  </section>
-
-  <!-- Footer mit Admin-Login -->
-  <footer>
-    <div>Made by Durdu 2025 – Version 26.0.0</div>
-    <div><a href="#" id="adminLink">Admin Login</a></div>
-  </footer>
-
-  <!-- Admin Login Modal -->
-  <div id="adminModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);align-items:center;justify-content:center;z-index:9999">
-    <div style="background:#fff;padding:1.2rem;border-radius:.6rem;max-width:320px;width:100%">
-      <h3>Admin Login</h3>
-      <label>Benutzername<br><input type="text" id="adminUser" style="width:100%;margin:.3rem 0"></label>
-      <label>Passwort<br><input type="password" id="adminPass" style="width:100%;margin:.3rem 0"></label>
-      <div style="margin-top:.6rem;display:flex;gap:.5rem;justify-content:flex-end">
-        <button id="adminCancel">Abbrechen</button>
-        <button id="adminSubmit" class="primary">Login</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Admin Dashboard -->
-  <section id="adminDashboard" style="display:none;margin-top:2rem">
-    <h2>Admin Dashboard</h2>
-    <p class="muted">Hier kannst du später Nutzerrechte, Einstellungen und Auswertungen verwalten.</p>
-    <div id="adminContent" class="card">✅ Erfolgreich eingeloggt als Admin.</div>
-  </section>
-
-  <script>
-  /* ===== Version ===== */
-  const APP_VERSION = "26.0.0";
-
-  /* ===== Fehler sichtbar machen ===== */
-  window.addEventListener('error', (e)=> {
-    const el = document.getElementById('toast');
-    el.textContent = 'Fehler: ' + (e?.message || e.toString());
-    el.style.display = 'block';
-  });
-
-  /* ===== Google Client-ID ===== */
-  const GOOGLE_CLIENT_ID = "836994805779-78af1p2hpubkidbklko086s93j165lv5.apps.googleusercontent.com";
-  let gisClient=null, accessToken=null;
-
-  /* ===== Tabs ===== */
-  const TABS=[...document.querySelectorAll('.tab')], VIEWS=[...document.querySelectorAll('section[data-view]')];
-  function setTab(name){TABS.forEach(t=>t.classList.toggle('active',t.dataset.tab===name)); VIEWS.forEach(v=>v.style.display=v.dataset.view===name?'':'none');}
-  TABS.forEach(t=>t.addEventListener('click',()=>setTab(t.dataset.tab)));
-
-  /* ===== Cache sauber halten ===== */
-  (async()=>{try{
-    if('serviceWorker' in navigator){const r=await navigator.serviceWorker.getRegistrations();for(const x of r) await x.unregister();}
-    if('caches' in window){const k=await caches.keys();await Promise.all(k.map(c=>caches.delete(c)));}
-  }catch(e){}})();
-
-  /* ===== Speicher (IndexedDB/LocalStorage Fallback) ===== */
-  const __idb = window.idbKeyval || { get: async k=>JSON.parse(localStorage.getItem(k)||'null'), set: async (k,v)=>localStorage.setItem(k,JSON.stringify(v)), del: async k=>localStorage.removeItem(k) };
-  const {get,set,del}=__idb;
-  const KEY='presse-remi-daten-v13', SETTINGS_KEY='presse-remi-settings-v10';
-
-  async function ensureShape(data){
-    data=data||{kundennummer:'',pakete:[],rechnungen:{}};
-    data.pakete ||= [];
-    data.rechnungen ||= {};
-    for(const p of data.pakete){ p.files ||= []; p.positionen ||= []; p.rechnungen ||= []; p.differenzen ||= []; }
-    for(const k of Object.keys(data.rechnungen)){ data.rechnungen[k].files ||= []; data.rechnungen[k].items ||= []; }
-    return data;
-  }
-  const readStore=async()=> ensureShape(await get(KEY));
-  const writeStore=async(o)=> set(KEY, await ensureShape(o));
-  const readSettings=()=>get(SETTINGS_KEY).then(x=>x||{allowed1:'',allowed2:'',allowed3:'',keywords:'Remission,Rechnung'});
-
-  /* ===== Utils ===== */
-  const $=sel=>document.querySelector(sel);
-  const toast=m=>{const el=document.getElementById('toast');el.textContent=m;el.style.display='block';setTimeout(()=>el.style.display='none',2500);};
-  const norm=s=>(s||'').toString().toLowerCase();
-  const parseDateAny=s=>s && /^\d{4}-\d{2}-\d{2}$/.test(s)?new Date(s+'T00:00:00'):null;
-  function threeMonthsAgo(){const d=new Date();d.setMonth(d.getMonth()-3);d.setHours(0,0,0,0);return d;}
-  function pruneOld(data){const c=threeMonthsAgo();data.pakete=(data.pakete||[]).filter(p=>{const d=parseDateAny(p.datum);return d && d>=c;});return data;}
-  const fmtEuro=n=>typeof n==='number'?new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(n):'';
-  function colorFor(str){ str=String(str||''); let h=0; for(let i=0;i<str.length;i++) h=(h*31 + str.charCodeAt(i))>>>0; const hues=[0,210,40,280,160,330,20,200,90,260,120,300,30,180,240]; const hue=hues[h%hues.length]; return `hsl(${hue} 75% 45%)`; }
-  function chipStyleFor(str){ const c=colorFor(str); return `color:${c};border-color:${c};background:color-mix(in hsl, ${c} 12%, white);`; }
-  const decodeB64Url = s => { try { return atob(String(s||'').replace(/-/g,'+').replace(/_/g,'/')); } catch { return ''; } };
-
-  /* ===== RG-Nummern erkennen ===== */
-  function extractInvoiceNumbersFromText(txt){
-    if(!txt) return [];
-    const out = new Set();
-    const patterns = [
-      /rechnungs?(?:nr|nummer)?\s*[:\-]?\s*(\d{5,12})/ig,
-      /\brg\s*[:\-]?\s*(\d{5,12})\b/ig,
-      /\brechnung\s*[:\-]?\s*(\d{5,12})\b/ig,
-      /\bbeleg(?:nr)?\s*[:\-]?\s*(\d{5,12})\b/ig,
-      /\bR-?G[\s:_-]*?(\d{5,12})\b/ig
-    ];
-    for(const re of patterns){ for(const m of txt.matchAll(re)) out.add(m[1]); }
-    for(const m of txt.matchAll(/\b(\d{6,12})\b/g)){
-      const num=m[1];
-      if(/^20\d{6,}$/.test(num)) continue;
-      out.add(num);
+/* PDF öffnen – Safari iOS Fix */
+async function openPdfSmart(urlOrBlob) {
+  try {
+    let blob;
+    if (urlOrBlob instanceof Blob) {
+      blob = urlOrBlob;
+    } else {
+      const res = await fetch(urlOrBlob);
+      blob = await res.blob();
     }
-    return Array.from(out);
-  }
-  function extractInvoiceNumbersFromFileName(name){
-    if(!name) return [];
-    const base = name.replace(/\.[a-z0-9]+$/i,'');
-    const out = new Set();
-    const patterns = [
-      /\b(?:rg|rechnung|rechn|beleg)[\s:_-]*?(\d{5,12})\b/ig,
-      /\b(\d{6,12})\b/g
-    ];
-    for(const re of patterns){ for(const m of base.matchAll(re)) out.add(m[1]); }
-    return Array.from(out);
-  }
-
-  /* ===== Parser ===== */
-  function scanTextForFields(t){
-    if(!t) return {};
-    const paket=(t.match(/(?:paket(?:nr|nummer)?|paket)\s*[-: ]\s*([0-9]{3,})/i) || t.match(/\bPaket\s*([0-9]{3,})\b/i))?.[1];
-    const kdnr=(t.match(/kunden(?:nr|nummer)?\s*[-: ]\s*([0-9]{3,})/i) || t.match(/\bKdnr\.?\s*([0-9]{3,})\b/i))?.[1];
-
-    const rgHits = extractInvoiceNumbersFromText(t);
-
-    const iso=(t.match(/(20[2-5][0-9]-[01][0-9]-[0-3][0-9])/))?.[1];
-    const de=(t.match(/([0-3][0-9]\.[01][0-9]\.20[2-5][0-9])/))?.[1];
-    const datum=iso || (de ? de.split('.').reverse().join('-') : '');
-
-    const isInvoice = /rechnung|rechnungsnummer|rg[- :]?\d+/i.test(t) && !/gutschrift/i.test(t);
-    const isRemi    = /remission|remi[- ]?liste|rückgabe|gutschrift/i.test(t) || !isInvoice;
-
-    // Artikelzeilen
-    const lines = t.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-    const asNumber = s => { if(!s) return null; s=s.replace(/\s/g,'').replace(/\./g,'').replace(/,/g,'.'); const v=parseFloat(s); return isFinite(v)?v:null; };
-    const items=[];
-    for(let i=0;i<lines.length;i++){
-      const L=lines[i];
-      let m = L.match(/^(\d{8,14}|[A-Z0-9][A-Z0-9._-]{2,})\s+(.+?)\s+(\d{1,6})\s+(\d+[.,]\d{2})\s+(\d+[.,]\d{2})$/i);
-      if(m){ const [_, code, title, qty, unit, total]=m; items.push({code, title, qty:+qty, unit:asNumber(unit), total:asNumber(total)}); continue; }
-      let m1=L.match(/^(\d{8,14}|[A-Z0-9][A-Z0-9._-]{2,})\s+(.+)$/i);
-      if(m1 && i+1<lines.length){
-        const L2=lines[i+1];
-        let m2 = L2.match(/^(\d{1,6})\s*(?:x|×)?\s*(\d+[.,]\d{2})\s*(?:=|≈)?\s*(\d+[.,]\d{2})$/i)
-               || L2.match(/^(\d{1,6})\s+(\d+[.,]\d{2})\s+(\d+[.,]\d{2})$/i);
-        if(m2){ const [__, qty, unit, total]=m2; items.push({code:m1[1], title:m1[2], qty:+qty, unit:asNumber(unit), total:asNumber(total)}); i++; continue; }
-      }
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    if (isIOS) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const w = window.open('', '_blank', 'noopener');
+        if (w) w.location.href = reader.result;
+      };
+      reader.readAsDataURL(blob);
+    } else {
+      const freshUrl = URL.createObjectURL(blob);
+      window.open(freshUrl, '_blank', 'noopener');
     }
-
-    return { paket, kdnr, rechnungen: rgHits, datum, type: isInvoice ? 'invoice' : (isRemi ? 'remission' : 'unknown'), items };
+  } catch (e) {
+    console.error(e);
+    toast('PDF konnte nicht geöffnet werden.');
   }
-  async function pdfBlobToText(blob){
-    const arr=await blob.arrayBuffer();
-    const pdf=await pdfjsLib.getDocument({data:arr}).promise;
-    let t=''; 
-    for(let i=1;i<=pdf.numPages;i++){
-      const page=await pdf.getPage(i);
-      const c=await page.getTextContent();
-      t+=c.items.map(it=>it.str).join(' ')+'\n';
-    }
-    return t;
+}
+
+/* ===== Dummy Speicher (ersetzt hier deine DB) ===== */
+let store = {
+  pakete: [
+    { nr:"701", datum:"2025-09-12", rechnungen:["25390501358"], files:[{url:"example.pdf"}], status:"ok", differenzen:[] }
+  ],
+  rechnungen: {
+    "25390501358": { nr:"25390501358", datum:"2025-09-28", items:[], files:[] }
   }
+};
 
-  /* ===== Abgleich ===== */
-  function diffItems(remiItems, invItems){
-    const idx = arr => {
-      const map=new Map();
-      for(const it of (arr||[])){
-        const key=(it.code||'').toLowerCase()+'|'+(it.title||'').toLowerCase();
-        const cur=map.get(key)||{qty:0,unit:null,total:0};
-        cur.qty += Number(it.qty||0);
-        cur.unit = cur.unit ?? it.unit ?? null;
-        cur.total = (cur.total||0) + (Number(it.total||0)||0);
-        map.set(key,cur);
-      }
-      return map;
-    };
-    const R=idx(remiItems), I=idx(invItems);
-    const missing=[], extra=[], mismatch=[];
-    for(const [key,rVal] of R.entries()){
-      if(!I.has(key)){ missing.push({key,expected:rVal}); continue; }
-      const iVal=I.get(key);
-      if(Number(rVal.qty||0)!==Number(iVal.qty||0)){ mismatch.push({key, remiQty:rVal.qty, invQty:iVal.qty}); }
-    }
-    for(const [key,iVal] of I.entries()){ if(!R.has(key)) extra.push({key,found:iVal}); }
-    return {missing, extra, mismatch};
-  }
-
-  /* ===== Datei-Referenzen ===== */
-  function addFileRefToPackage(data, paketNr, fileObj){
-    let p = (data.pakete||[]).find(x=>x.nr===paketNr);
-    if(!p){ p={nr:paketNr||'unbekannt', datum:'', status:'offen', rechnungen:[], positionen:[], differenzen:[], files:[]}; data.pakete.push(p); }
-    p.files ||= []; p.files.push(fileObj);
-  }
-  function addFileRefToInvoice(data, rgNr, fileObj){
-    const r = (data.rechnungen[rgNr] ||= {nr:rgNr, datum:'', items:[], files:[]});
-    r.files ||= []; r.files.push(fileObj);
-  }
-
-  /* ===== Merge + Status ===== */
-  async function mergeParsedIntoStore(parsed, fileRef){
-    let data = await readStore(); data = await ensureShape(data);
-
-    // Rechnungen anlegen/ergänzen
-    if(parsed.type==='invoice' && parsed.rechnungen?.length){
-      for(const rg of parsed.rechnungen){
-        const r=data.rechnungen[rg] || {nr:rg, datum:parsed.datum||'', items:[], files:[]};
-        if(parsed.items?.length){
-          const seen=new Set(r.items.map(x=>x.code+'|'+x.title));
-          for(const it of parsed.items){
-            const key=(it.code||'')+'|'+(it.title||'');
-            if(!seen.has(key)){ r.items.push(it); seen.add(key); }
-          }
-        }
-        if(parsed.datum && !r.datum) r.datum = parsed.datum;
-        if(fileRef) addFileRefToInvoice(data, rg, fileRef);
-        data.rechnungen[rg]=r;
-      }
-    }
-
-    // Paket anlegen/ergänzen
-    if(parsed.paket || parsed.kdnr || parsed.items?.length){
-      let p = parsed.paket ? (data.pakete||[]).find(x=>x.nr===parsed.paket) : null;
-      if(!p){ p={nr:parsed.paket||'unbekannt', datum:parsed.datum||'', status:'offen', rechnungen:[], positionen:[], differenzen:[], files:[]}; data.pakete.push(p); }
-      if(parsed.kdnr){ p.kundennummer = parsed.kdnr; }
-      if(parsed.datum && !p.datum){ p.datum = parsed.datum; }
-
-      if(parsed.type!=='invoice' && parsed.items?.length){
-        const seen=new Set(p.positionen.map(x=>x.code+'|'+x.title));
-        for(const it of parsed.items){
-          const key=(it.code||'')+'|'+(it.title||'');
-          if(!seen.has(key)){ p.positionen.push(it); seen.add(key); }
-        }
-      }
-      if(parsed.type==='invoice' && parsed.rechnungen?.length){
-        const before = new Set(p.rechnungen);
-        for(const rg of parsed.rechnungen){ if(!p.rechnungen.includes(rg)) p.rechnungen.push(rg); }
-        // Wenn Paket schon PDFs hat und wir jetzt Rechnungen verknüpfen -> PDFs an RG spiegeln
-        if(p.files?.length){
-          for(const rg of parsed.rechnungen){
-            for(const f of p.files) addFileRefToInvoice(data, rg, f);
-          }
-        }
-      }
-
-      // PDF an Paket – und an alle bereits verknüpften Rechnungen spiegeln
-      if(fileRef && parsed.paket){
-        addFileRefToPackage(data, parsed.paket, fileRef);
-        const pkgNow = (data.pakete || []).find(x => x.nr === parsed.paket);
-        if (pkgNow && Array.isArray(pkgNow.rechnungen)) {
-          for (const rg of pkgNow.rechnungen) addFileRefToInvoice(data, rg, fileRef);
+/* ===== Auto-Reparatur: Rechnungen PDFs von Paketen übernehmen ===== */
+async function repairInvoiceFilesFromPackages(data) {
+  let changed=false;
+  for(const [rg,r] of Object.entries(data.rechnungen||{})) {
+    if(r.files && r.files.length) continue;
+    const donors=(data.pakete||[]).filter(p=>(p.rechnungen||[]).includes(rg) && p.files && p.files.length);
+    if(!donors.length) continue;
+    r.files ||= [];
+    for(const p of donors) {
+      for(const f of p.files) {
+        if(!r.files.some(x=>x.url===f.url)) {
+          r.files.push(f);
+          changed=true;
         }
       }
     }
-
-    // Abgleich je Paket
-    for (const p of data.pakete) {
-      p.differenzen = [];
-      const linkedInvoices = (p.rechnungen || []).map(rg => data.rechnungen[rg]).filter(Boolean);
-      if (!linkedInvoices.length) { p.status = 'offen'; continue; }
-
-      let hasIssues = false;
-      for (const rg of (p.rechnungen || [])) {
-        const r = data.rechnungen[rg];
-        if (!r) continue;
-        const diffs = diffItems(p.positionen || [], r.items || []);
-        p.differenzen.push({ rg, ...diffs });
-        if (diffs.missing.length || diffs.extra.length || diffs.mismatch.length) hasIssues = true;
-      }
-      p.status = hasIssues ? 'abweichung' : 'ok';
-    }
-
-    data = pruneOld(data);
-    await writeStore(data);
-    if($('#inputArea')) $('#inputArea').value=JSON.stringify(data,null,2);
-    render(data);
-    return true;
   }
+  return changed;
+}
 
-  /* ===== Render ===== */
-  const inputArea=$('#inputArea'), kdnrSelect=$('#kdnrSelect'), searchInput=$('#searchInput');
-  const dateFrom=$('#dateFrom'), dateTo=$('#dateTo');
-  const alertBox=$('#alertBox');
-  let onlyMissing=false;
+/* ===== Render ===== */
+async function render(data){
+  const fixed = await repairInvoiceFilesFromPackages(data);
+  if (fixed) toast("Rechnungs-PDFs repariert ✅");
 
-  function computeStats(data){
-    const list=data.pakete||[]; 
-    const abw=list.filter(p=>(p.differenzen||[]).some(d=>d.missing?.length||d.extra?.length||d.mismatch?.length)).length;
-    const sum=list.reduce((a,p)=>a+(typeof p.summe==='number'?p.summe:0),0);
-    return {pakete:list.length, abw, sum};
-  }
-  function filesHtml(files){
-    files=files||[];
-    if(!files.length) return '<span class="muted">keine PDF</span>';
-    return files.map((f,i)=>`<a href="${f.url}" target="_blank" rel="noopener">PDF ${i+1}</a>`).join(' • ');
-  }
-  function pkgRowHtml(p,k){
-    const hasIssues = (p.differenzen||[]).some(x=>x.missing?.length||x.extra?.length||x.mismatch?.length);
-    const re=(p.rechnungen||[]).map(r=>`<a href="#" data-open-rg="${r}" class="chip" style="${chipStyleFor(r)}" title="Rechnung öffnen">${r}</a>`).join('');
-    const diffs = (p.differenzen||[]).map(d=>{
-      const miss = (d.missing||[]).map(m=>{ const [code,title]=String(m.key).split('|'); return `<li>❌ fehlt: <b>${code||''}</b> – ${title||''} (Remi erwartet ${m.expected?.qty??'?'})</li>`; }).join('');
-      const extra = (d.extra||[]).map(e=>{ const [code,title]=String(e.key).split('|'); return `<li>➕ extra: <b>${code||''}</b> – ${title||''} (nur auf Rechnung: ${e.found?.qty??'?'})</li>`; }).join('');
-      const mm = (d.mismatch||[]).map(x=>{ const [code,title]=String(x.key).split('|'); return `<li>⚖️ Menge abw.: <b>${code||''}</b> – ${title||''} (Remi ${x.remiQty??'?'}, Rechn. ${x.invQty??'?'})</li>`; }).join('');
-      const ok = (!miss && !extra && !mm) ? '<div class="muted">✓ Abgleich ok</div>' : '';
-      return `<div class="card" style="margin:.35rem 0;padding:.45rem .6rem;border-left:4px solid ${colorFor(d.rg)}">
-        <div class="muted" style="margin-bottom:.2rem">Abgleich zu RG <b style="color:${colorFor(d.rg)}">${d.rg}</b></div>
-        ${ok || `<ul style="margin:.2rem 0 .2rem 1rem">${miss}${extra}${mm}</ul>`}
-      </div>`;
-    }).join('') || '<div class="muted">Keine Abgleiche</div>';
+  document.getElementById("overviewPackages").innerHTML =
+    (data.pakete||[]).map(p=>`
+      <details>
+        <summary>
+          Paket ${p.nr} (${p.datum}) 
+          <a href="${p.files[0]?.url||'#'}" class="pkg-link" data-paket="${p.nr}">PDF</a>
+        </summary>
+      </details>`).join("");
 
-    const firstPdf = (p.files&&p.files[0]) ? p.files[0].url : null;
-    const statusLabel = p.status === 'ok' ? 'ok' : (p.status || '');
+  document.getElementById("overviewInvoices").innerHTML =
+    Object.values(data.rechnungen||{}).map(r=>`
+      <details>
+        <summary>
+          RG ${r.nr} (${r.datum})
+          ${r.files?.length ? `<a href="${r.files[0].url}" class="rg-link" data-rg="${r.nr}">PDF</a>` : '<span>keine PDF</span>'}
+        </summary>
+      </details>`).join("");
+}
 
-    return `<details class="card" ${hasIssues?'open':''}>
-      <summary class="row">
-        <div><a href="${firstPdf||'#'}" ${firstPdf?'target="_blank" rel="noopener"':''} class="pkg-link" data-paket="${p.nr}"><b>Paket ${p.nr||''}</b></a></div>
-        <div class="muted">${p.datum||''}</div>
-        <div>${re||'<span class="muted">–</span>'}</div>
-        <div class="muted" style="color:${p.status==='abweichung'?'#c00':'inherit'}">${statusLabel}</div>
-      </summary>
-      <div style="margin:.4rem 0 .2rem"><b>PDFs:</b> ${filesHtml(p.files)}</div>
-      ${ p.status==='offen'
-          ? '<div class="muted" style="margin-top:.4rem">Noch keine Rechnung verknüpft – Abgleich nicht möglich.</div>'
-          : diffs
-        }
-    </details>`;
-  }
-  function invRowHtml(r){
-    const firstPdf = (r.files&&r.files[0]) ? r.files[0].url : null;
-    const items = (r.items||[]).slice(0,12).map(it=>`<li><b>${it.code||''}</b> – ${it.title||''} • Menge: ${it.qty??''}</li>`).join('');
-    const noPdfHint = (!r.files || !r.files.length) ? '<div class="muted">Keine PDF verknüpft</div>' : '';
-    return `<details class="card">
-      <summary class="row">
-        <div><a href="${firstPdf||'#'}" ${firstPdf?'target="_blank" rel="noopener"':''} class="rg-link" data-rg="${r.nr}"><b>RG ${r.nr}</b></a></div>
-        <div class="muted">${r.datum||''}</div>
-        <div>${filesHtml(r.files)}</div>
-        <div class="muted">Positionen: ${(r.items||[]).length}</div>
-      </summary>
-      ${noPdfHint}
-      <div style="margin:.4rem 0 .2rem">
-        <button class="attachPdfBtn" data-rg="${r.nr}">PDF hinzufügen</button>
-        <input type="file" accept="application/pdf" class="attachPdfInput" data-rg="${r.nr}" style="display:none">
-      </div>
-      ${ items ? `<ul style="margin:.4rem 0 .2rem 1rem">${items}${(r.items||[]).length>12?'<li class="muted">…</li>':''}</ul>` : '<div class="muted">Keine Positionen erkannt</div>'}
-    </details>`;
-  }
-  function renderAlertBox(data){
-    const pkgs = (data.pakete||[]);
-    const bad = pkgs.filter(p => p.status==='abweichung');
-    if(bad.length){
-      alertBox.style.display='block';
-      const maxShow = 6;
-      const list = bad.slice(0,maxShow).map(p=>`<li>Paket <b>${p.nr}</b> (${p.datum||'–'}) – Rechnungen: ${(p.rechnungen||[]).join(', ')||'–'}</li>`).join('');
-      alertBox.innerHTML = `<b>⚠️ Abweichungen:</b> ${bad.length} Paket(e) betroffen.
-        <ul style="margin:.4rem 0 .2rem 1rem">${list}${bad.length>maxShow?'<li class="muted">…</li>':''}</ul>`;
-    }else{
-      alertBox.style.display='none';
-      alertBox.innerHTML='';
-    }
-  }
-  function render(data){
-    const gk=data.kundennummer||''; 
-    const q=norm($('#searchInput')?.value), ksel=$('#kdnrSelect')?.value, f=$('#dateFrom')?.value, t=$('#dateTo')?.value;
+/* ===== Link Handler ===== */
+document.addEventListener('click', function(e) {
+  const a = e.target.closest('a.rg-link, a.pkg-link');
+  if (!a) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const href = a.getAttribute('href');
+  if (href && href !== '#') openPdfSmart(href);
+}, true);
 
-    const allPkgs=(data.pakete||[]).map(p=>({...p,_k:p.kundennummer||gk}));
-    const pkgs=allPkgs.filter(p=>{
-      const d=parseDateAny(p.datum);
-      const issues=(p.differenzen||[]).some(x=>x.missing?.length||x.extra?.length||x.mismatch?.length);
-      return (!ksel || p._k===ksel)
-        && (!q || [p.nr,p.datum,p.status,(p.rechnungen||[]).join(' '),p._k].some(x=>norm(x).includes(q)))
-        && (!onlyMissing || issues)
-        && (!f && !t ? true : (d && (!f || d>=new Date(f+'T00:00:00')) && (!t || d<=new Date(t+'T23:59:59'))));
-    });
-
-    const invAll = Object.values(data.rechnungen||{});
-    const invs = invAll.filter(r=>{
-      const d=parseDateAny(r.datum);
-      return (!q || [r.nr,r.datum,(r.items||[]).map(x=>x.title).join(' ')].some(x=>norm(String(x)).includes(q)))
-        && (!f && !t ? true : (d && (!f || d>=new Date(f+'T00:00:00')) && (!t || d<=new Date(t+'T23:59:59'))));
-    });
-
-    $('#overviewPackages').innerHTML = pkgs.length ? pkgs.map(p=>pkgRowHtml(p,p._k)).join('') : '<div class="muted">Keine Pakete…</div>';
-    $('#overviewInvoices').innerHTML = invs.length ? invs.map(invRowHtml).join('') : '<div class="muted">Keine Rechnungen…</div>';
-
-    const s=computeStats({pakete:pkgs}); 
-    if(pkgs.length){ $('#totals').hidden=false; $('#badgeCount').textContent=`${s.pakete} Pakete`; $('#badgeMissing').textContent=`${s.abw} abweichend`; $('#badgeSum').textContent=`Summe: ${fmtEuro(s.sum)}`; } 
-    else { $('#totals').hidden=true; }
-
-    renderAlertBox(data);
-
-    const kset=new Set(); if(data.kundennummer) kset.add(String(data.kundennummer)); (data.pakete||[]).forEach(p=>{ if(p.kundennummer) kset.add(String(p.kundennummer)); });
-    const cur=kdnrSelect.value; kdnrSelect.innerHTML='<option value="">Alle Kunden</option>'+Array.from(kset).sort().map(k=>`<option>${k}</option>`).join('');
-    if(cur && Array.from(kset).includes(cur)) kdnrSelect.value=cur;
-
-    // Rechnung-Links per Chip öffnen (falls im Paket angezeigt)
-    document.querySelectorAll('[data-open-rg]').forEach(a=>{
-      a.addEventListener('click',e=>{
-        e.preventDefault();
-        const rg=a.getAttribute('data-open-rg');
-        const r=(data.rechnungen||{})[rg];
-        if(r?.files?.length){ window.open(r.files[0].url,'_blank','noopener'); }
-        else toast('Zu dieser Rechnung ist keine PDF verknüpft.');
-      });
-    });
-  }
-
-  /* ===== Datei-Import ===== */
-  document.getElementById('importBtn').addEventListener('click',()=>document.getElementById('importFile').click());
-  document.getElementById('importFile').addEventListener('change',async e=>{for(const f of Array.from(e.target.files||[])) await handleFile(f); e.target.value='';});
-  const dropZone=document.getElementById('dropZone');
-  ['dragenter','dragover'].forEach(ev=>dropZone.addEventListener(ev,e=>{e.preventDefault(); dropZone.style.background='#eef3ff';}));
-  ['dragleave','drop'].forEach(ev=>dropZone.addEventListener(ev,e=>{e.preventDefault(); dropZone.style.background='#f8faff';}));
-  dropZone.addEventListener('drop', async e=>{for(const f of Array.from(e.dataTransfer.files||[])) await handleFile(f);});
-
-  async function handleFile(file){
-    const name=(file.name||'').toLowerCase();
-
-    if(name.endsWith('.json')){
-      const obj=JSON.parse(await file.text());
-      await writeStore(pruneOld(obj));
-      inputArea.value=JSON.stringify(await readStore(),null,2);
-      toast('JSON importiert ✅'); render(await readStore());
-      return;
-    }
-
-    if(name.endsWith('.eml')){
-      const raw=await file.text();
-      const subj=(raw.match(/^Subject:\s*(.+)$/mi)||[])[1]||'';
-      const body=raw.split(/\r?\n\r?\n/).slice(1).join('\n');
-      const parsed = scanTextForFields(subj+'\n'+body);
-      await mergeParsedIntoStore(parsed, null);
-      toast('EML importiert ✅'); return;
-    }
-
-    if(name.endsWith('.pdf')){
-      const url = URL.createObjectURL(file); // Tab-lokal
-      const text=await pdfBlobToText(file);
-      let parsed = scanTextForFields(text);
-
-      // RG aus Dateiname + Text
-      const rgFromName = extractInvoiceNumbersFromFileName(file.name);
-      const allRg = new Set([...(parsed.rechnungen || []), ...rgFromName]);
-
-      // Fallbacks
-      let store = await readStore(); store = await ensureShape(store);
-      if (allRg.size === 0 && parsed.paket) {
-        const pkg = (store.pakete || []).find(p => p.nr === parsed.paket);
-        if (pkg?.rechnungen?.length) pkg.rechnungen.forEach(rg => allRg.add(rg));
-      }
-      if (allRg.size === 0) {
-        const rgKeys = Object.keys(store.rechnungen || {});
-        if (rgKeys.length === 1) allRg.add(rgKeys[0]);
-      }
-      if (allRg.size === 0 && rgFromName.length) {
-        for (const candidate of rgFromName) {
-          if (store.rechnungen && store.rechnungen[candidate]) allRg.add(candidate);
-        }
-      }
-
-      const fileRef = {name:file.name, url, type:'pdf', source:'upload'};
-
-      // an Rechnung(en) hängen
-      if (allRg.size > 0) {
-        for (const rg of allRg) {
-          let d=await readStore(); d=await ensureShape(d);
-          addFileRefToInvoice(d, rg, fileRef);
-          await writeStore(d);
-        }
-        parsed.rechnungen = Array.from(allRg);
-        parsed.type = 'invoice';
-      }
-
-      // an Paket hängen UND an dessen Rechnungen spiegeln
-      if (parsed.paket) {
-        let d = await readStore(); d = await ensureShape(d);
-        addFileRefToPackage(d, parsed.paket, fileRef);
-        const pkg = (d.pakete || []).find(p => p.nr === parsed.paket);
-        if (pkg?.rechnungen?.length) {
-          for (const rg of pkg.rechnungen) addFileRefToInvoice(d, rg, fileRef);
-        }
-        await writeStore(d);
-      }
-
-      await mergeParsedIntoStore(parsed, fileRef);
-      toast('PDF importiert ✅'); return;
-    }
-
-    toast('Dateityp nicht unterstützt');
-  }
-
-  /* ===== Export ===== */
-  function exportJSONdata(data){ const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remi-export.json'; a.click(); }
-  function exportCSV(data){
-    const rows=[['Kdnr','Paket','Datum','Status','Rechnungen','Summe']];
-    (data.pakete||[]).forEach(p=>rows.push([p.kundennummer||data.kundennummer||'',p.nr||'',p.datum||'',p.status||'',(p.rechnungen||[]).join(' '),typeof p.summe==='number'?p.summe:'']));
-    const csv=rows.map(r=>r.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(';')).join('\n');
-    const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remi-export.csv'; a.click();
-  }
-  async function exportPDFdoc(data){ const {jsPDF}=window.jspdf; const doc=new jsPDF(); doc.text('Presse Remi – Export',14,14); const rows=(data.pakete||[]).map(p=>[p.kundennummer||data.kundennummer||'',p.nr||'',p.datum||'',p.status||'',(p.rechnungen||[]).join(' '),typeof p.summe==='number'?fmtEuro(p.summe):'']); doc.autoTable({head:[['Kdnr','Paket','Datum','Status','Rechnungen','Summe']],body:rows,startY:18,styles:{fontSize:9}}); doc.save('remi-export.pdf');}
-  function exportDiffCSV(data){
-    const rows = [['Kdnr','Paket','Rechnung','Typ','Code','Titel','Remi-Menge','Rechn.-Menge']];
-    const kdnr = data.kundennummer||'';
-    for(const p of (data.pakete||[])){
-      const baseK = p.kundennummer || kdnr || '';
-      for(const d of (p.differenzen||[])){
-        for(const m of (d.missing||[])){ const [code,title]=String(m.key).split('|'); rows.push([baseK,p.nr||'',d.rg||'','fehlt',code||'',title||'',m.expected?.qty??'', '0']); }
-        for(const e of (d.extra||[]))  { const [code,title]=String(e.key).split('|'); rows.push([baseK,p.nr||'',d.rg||'','extra', code||'',title||'','0', e.found?.qty??'']); }
-        for(const mm of (d.mismatch||[])){ const [code,title]=String(mm.key).split('|'); rows.push([baseK,p.nr||'',d.rg||'','menge', code||'',title||'',mm.remiQty??'',mm.invQty??'']); }
-      }
-    }
-    const csv=rows.map(r=>r.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(';')).join('\n');
-    const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remi-differenzen.csv'; a.click();
-  }
-
-  /* ===== Buttons & Filter ===== */
-  document.getElementById('forceUpdate').addEventListener('click', async ()=>{
-    try{
-      if('serviceWorker' in navigator){const r=await navigator.serviceWorker.getRegistrations();for(const x of r) await x.unregister();}
-      if('caches' in window){const k=await caches.keys();await Promise.all(k.map(c=>caches.delete(c)));}
-    }catch(e){}
-    toast('Update erzwungen – neu laden…'); setTimeout(()=>location.reload(true),600);
-  });
-  document.getElementById('toggleMissing').addEventListener('click', async ()=>{ window.onlyMissing=!window.onlyMissing; toast(window.onlyMissing?'Nur abweichende…':'Alle anzeigen'); render(await readStore()); });
-  document.getElementById('clearSearch').addEventListener('click', async ()=>{ document.getElementById('searchInput').value=''; document.getElementById('dateFrom').value=''; document.getElementById('dateTo').value=''; toast('Filter zurückgesetzt'); render(await readStore()); });
-  document.getElementById('saveBtn').addEventListener('click', async ()=>{ try{let obj=JSON.parse(document.getElementById('inputArea').value||'{}'); obj=pruneOld(await ensureShape(obj||{kundennummer:'',pakete:[],rechnungen:{}})); await writeStore(obj); toast('Gespeichert ✅'); render(obj);}catch(e){toast('JSON-Fehler: '+e.message);} });
-  document.getElementById('loadBtn').addEventListener('click', async ()=>{ let d=await readStore(); d=pruneOld(d); await writeStore(d); document.getElementById('inputArea').value=JSON.stringify(d,null,2); toast('Geladen ✅'); render(d); });
-  document.getElementById('clearBtn').addEventListener('click', async ()=>{ await del(KEY); document.getElementById('inputArea').value=''; toast('Gelöscht ✅'); render({kundennummer:'',pakete:[],rechnungen:{}}); });
-  document.getElementById('exportJson').addEventListener('click', async ()=>exportJSONdata(await readStore()));
-  document.getElementById('exportCsv').addEventListener('click', async ()=>exportCSV(await readStore()));
-  document.getElementById('exportPdf').addEventListener('click', async ()=>exportPDFdoc(await readStore()));
-  document.getElementById('exportDiffCsv').addEventListener('click', async ()=>exportDiffCSV(await readStore()));
-  document.getElementById('settingsSave').addEventListener('click', async ()=>{ const s={allowed1:document.getElementById('allowed1').value.trim(),allowed2:document.getElementById('allowed2').value.trim(),allowed3:document.getElementById('allowed3').value.trim(),keywords:document.getElementById('keywords').value.trim()||'Remission,Rechnung'}; await set(SETTINGS_KEY,s); toast('Einstellungen gespeichert ✅'); });
-
-  /* ===== Gmail ===== */
-  document.getElementById('gmailConnect').addEventListener('click',()=>{
-    if(!window.google?.accounts?.oauth2){ toast("Google API nicht geladen – neu laden"); return; }
-    gisClient=google.accounts.oauth2.initTokenClient({
-      client_id: GOOGLE_CLIENT_ID,
-      scope:'https://www.googleapis.com/auth/gmail.readonly',
-      prompt:'consent',
-      include_granted_scopes:true,
-      callback:(resp)=>{ if(resp?.access_token){ accessToken=resp.access_token; document.getElementById('gmailFetch').disabled=false; toast('Gmail verbunden ✅'); } else toast('Login abgebrochen'); }
-    });
-    gisClient.requestAccessToken();
-  });
-
-  document.getElementById('gmailFetch').addEventListener('click', async ()=>{
-    try{
-      if(!accessToken){ toast("Bitte zuerst „Gmail verbinden“"); return; }
-      const s=await readSettings();
-      const sender = ['from:qtrado','from:@qtrado.de', s.allowed1, s.allowed2, s.allowed3].filter(Boolean).join(' OR ');
-      const words  = (s.keywords||'Remission,Rechnung').split(',').map(w=>w.trim()).filter(Boolean).map(w=>`"${w}"`).join(' OR ');
-      const baseQ  = [`(${sender})`, words?`(${words})`:'', 'newer_than:365d'].filter(Boolean).join(' ');
-      toast('Suche: '+baseQ);
-
-      let imported=0, nextPageToken=null, rounds=0;
-      const flatten = p => (p||[]).flatMap(x=> x?.parts ? flatten(x.parts) : [x]);
-
-      do{
-        rounds++;
-        const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(baseQ)}&maxResults=200${nextPageToken?`&pageToken=${nextPageToken}`:''}`;
-        const listResp = await fetch(url,{headers:{Authorization:`Bearer ${accessToken}`}});
-        const list = await listResp.json();
-        nextPageToken=list.nextPageToken||null;
-        if(!listResp.ok){ toast(`Gmail-Fehler: ${listResp.status}`); break; }
-        if(!list.messages?.length) break;
-
-        for(const m of list.messages){
-          const msg = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=full`,{headers:{Authorization:`Bearer ${accessToken}`}}).then(r=>r.json());
-          const headers=msg.payload?.headers||[];
-          const from=(headers.find(h=>h.name==='From')?.value||'').toLowerCase();
-          if(!(from.includes('qtrado')||from.includes('@qtrado.de'))) continue;
-
-          const subject=headers.find(h=>h.name==='Subject')?.value||'';
-          let bodyText=''; const parts=msg.payload?.parts||[]; const plain=parts.find(p=>p.mimeType==='text/plain')||msg.payload;
-          if(plain?.body?.data) bodyText=decodeB64Url(plain.body.data);
-
-          const baseParsed = scanTextForFields(subject+'\n'+bodyText);
-          let ok = await mergeParsedIntoStore(baseParsed, null);
-
-          const pdfParts = flatten(parts).filter(p=>p?.mimeType==='application/pdf');
-          for(const p of pdfParts){
-            const attId=p.body?.attachmentId; if(!attId) continue;
-            const att=await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}/attachments/${attId}`,{headers:{Authorization:`Bearer ${accessToken}`}}).then(r=>r.json());
-            if(!att.data) continue;
-            const bin = Uint8Array.from(decodeB64Url(att.data), c=>c.charCodeAt(0));
-            const blob = new Blob([bin],{type:'application/pdf'});
-            const url = URL.createObjectURL(blob);
-            const text = await pdfBlobToText(blob);
-            const parsed = scanTextForFields(text);
-
-            const fileRef = {name:(p.filename||'Anhang.pdf'), url, type:'pdf', source:'gmail'};
-            if(parsed.rechnungen?.length){ for(const rg of parsed.rechnungen){ let d=await readStore(); d=await ensureShape(d); addFileRefToInvoice(d, rg, fileRef); await writeStore(d); } }
-            if(parsed.paket){ let d=await readStore(); d=await ensureShape(d); addFileRefToPackage(d, parsed.paket, fileRef); await writeStore(d); }
-
-            const ok2 = await mergeParsedIntoStore(parsed, fileRef);
-            ok = ok || ok2;
-          }
-          if(ok) imported++;
-        }
-        if(rounds>=6) nextPageToken=null;
-      }while(nextPageToken);
-
-      toast(`Qtrado-E-Mails verarbeitet: ${imported}`);
-    }catch(e){ console.error(e); toast('Gmail-Fehler: '+(e.message||e)); }
-  });
-
-  /* ===== „PDF hinzufügen“ (Rechnung) ===== */
-  document.addEventListener('click', async (e)=>{
-    const btn = e.target.closest('.attachPdfBtn');
-    if (!btn) return;
-    const rg = btn.getAttribute('data-rg');
-    const input = document.querySelector(`.attachPdfInput[data-rg="${rg}"]`);
-    if (input) input.click();
-  });
-  document.addEventListener('change', async (e)=>{
-    const inp = e.target.closest('.attachPdfInput');
-    if (!inp || !inp.files || !inp.files[0]) return;
-    const rg = inp.getAttribute('data-rg');
-    const file = inp.files[0];
-
-    const url = URL.createObjectURL(file);
-    const text = await pdfBlobToText(file);
-    const parsed = scanTextForFields(text);
-    parsed.rechnungen = Array.from(new Set([...(parsed.rechnungen||[]), rg]));
-
-    const fileRef = { name: file.name, url, type: 'pdf', source: 'manual' };
-    let d = await readStore(); d = await ensureShape(d);
-    addFileRefToInvoice(d, rg, fileRef);
-    await writeStore(d);
-
-    await mergeParsedIntoStore(parsed, fileRef);
-    toast(`PDF zu RG ${rg} verknüpft ✅`);
-  });
-
-  /* ===== Wichtig: Links in <summary> zuverlässig öffnen (auch iOS) ===== */
-  document.addEventListener('click', function (e) {
-    const a = e.target.closest('a.rg-link, a.pkg-link');
-    if (!a) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const href = a.getAttribute('href');
-    if (href && href !== '#') window.open(href, '_blank', 'noopener');
-  }, true); // Capture!
-
-  /* ===== Init ===== */
-  (async ()=>{
-    setTab('main');
-    await set(SETTINGS_KEY, await readSettings());
-    let d=await readStore(); d=pruneOld(d||{kundennummer:'',pakete:[],rechnungen:{}}); await writeStore(d);
-    if($('#inputArea')) $('#inputArea').value=JSON.stringify(d,null,2);
-    render(d);
-    toast('App geladen ✅ v'+APP_VERSION);
-  })();
-
-  /* ===== Admin Login ===== */
-  const ADMIN_USER = "admin";
-  const ADMIN_PASS = "remi2025";
-  document.getElementById("adminLink").addEventListener("click", e=>{
-    e.preventDefault();
-    document.getElementById("adminModal").style.display="flex";
-  });
-  document.getElementById("adminCancel").addEventListener("click", ()=>{
-    document.getElementById("adminModal").style.display="none";
-  });
-  document.getElementById("adminSubmit").addEventListener("click", ()=>{
-    const u=document.getElementById("adminUser").value.trim();
-    const p=document.getElementById("adminPass").value.trim();
-    if(u===ADMIN_USER && p===ADMIN_PASS){
-      document.getElementById("adminModal").style.display="none";
-      document.getElementById("adminDashboard").style.display="block";
-      toast("Admin Login erfolgreich ✅");
-    }else{
-      alert("❌ Falsche Zugangsdaten!");
-    }
-  });
-  </script>
+/* ===== Init ===== */
+render(store);
+</script>
 </body>
 </html>
