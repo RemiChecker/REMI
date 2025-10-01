@@ -186,29 +186,29 @@
   </section>
 
   <script>
-  // ========= Fehler sichtbar machen =========
+  /* ===== Fehler sichtbar machen ===== */
   window.addEventListener('error', (e)=> {
     const el = document.getElementById('toast');
     el.textContent = 'Fehler: ' + (e?.message || e.toString());
     el.style.display = 'block';
   });
 
-  // ========= Google Client-ID =========
+  /* ===== Google Client-ID ===== */
   const GOOGLE_CLIENT_ID = "836994805779-78af1p2hpubkidbklko086s93j165lv5.apps.googleusercontent.com";
   let gisClient=null, accessToken=null;
 
-  // ========= Tabs =========
+  /* ===== Tabs ===== */
   const TABS=[...document.querySelectorAll('.tab')], VIEWS=[...document.querySelectorAll('section[data-view]')];
   function setTab(name){TABS.forEach(t=>t.classList.toggle('active',t.dataset.tab===name)); VIEWS.forEach(v=>v.style.display=v.dataset.view===name?'':'none');}
   TABS.forEach(t=>t.addEventListener('click',()=>setTab(t.dataset.tab)));
 
-  // ========= Cache sauber halten =========
+  /* ===== Cache sauber halten ===== */
   (async()=>{try{
     if('serviceWorker' in navigator){const r=await navigator.serviceWorker.getRegistrations();for(const x of r) await x.unregister();}
     if('caches' in window){const k=await caches.keys();await Promise.all(k.map(c=>caches.delete(c)));}
   }catch(e){}})();
 
-  // ========= Speicher (IndexedDB) =========
+  /* ===== Speicher (IndexedDB) ===== */
   const __idb = window.idbKeyval || { get: async k=>JSON.parse(localStorage.getItem(k)||'null'), set: async (k,v)=>localStorage.setItem(k,JSON.stringify(v)), del: async k=>localStorage.removeItem(k) };
   const {get,set,del}=__idb;
   const KEY='presse-remi-daten-v13', SETTINGS_KEY='presse-remi-settings-v10';
@@ -225,7 +225,7 @@
   const writeStore=async(o)=> set(KEY, await ensureShape(o));
   const readSettings=()=>get(SETTINGS_KEY).then(x=>x||{allowed1:'',allowed2:'',allowed3:'',keywords:'Remission,Rechnung'});
 
-  // ========= Utils =========
+  /* ===== Utils ===== */
   const $=sel=>document.querySelector(sel);
   const toast=m=>{const el=document.getElementById('toast');el.textContent=m;el.style.display='block';setTimeout(()=>el.style.display='none',2500);};
   const norm=s=>(s||'').toString().toLowerCase();
@@ -237,7 +237,7 @@
   function chipStyleFor(str){ const c=colorFor(str); return `color:${c};border-color:${c};background:color-mix(in hsl, ${c} 12%, white);`; }
   const decodeB64Url = s => { try { return atob(String(s||'').replace(/-/g,'+').replace(/_/g,'/')); } catch { return ''; } };
 
-  // ========= RG-Nummern erkennen =========
+  /* ===== RG-Nummern erkennen ===== */
   function extractInvoiceNumbersFromText(txt){
     if(!txt) return [];
     const out = new Set();
@@ -268,7 +268,7 @@
     return Array.from(out);
   }
 
-  // ========= Parser =========
+  /* ===== Parser ===== */
   function scanTextForFields(t){
     if(!t) return {};
     const paket=(t.match(/(?:paket(?:nr|nummer)?|paket)\s*[-: ]\s*([0-9]{3,})/i) || t.match(/\bPaket\s*([0-9]{3,})\b/i))?.[1];
@@ -314,7 +314,7 @@
     return t;
   }
 
-  // ========= Abgleich =========
+  /* ===== Abgleich ===== */
   function diffItems(remiItems, invItems){
     const idx = arr => {
       const map=new Map();
@@ -339,7 +339,7 @@
     return {missing, extra, mismatch};
   }
 
-  // ========= Datei-Referenzen =========
+  /* ===== Datei-Referenzen ===== */
   function addFileRefToPackage(data, paketNr, fileObj){
     let p = (data.pakete||[]).find(x=>x.nr===paketNr);
     if(!p){ p={nr:paketNr||'unbekannt', datum:'', status:'offen', rechnungen:[], positionen:[], differenzen:[], files:[]}; data.pakete.push(p); }
@@ -350,10 +350,11 @@
     r.files ||= []; r.files.push(fileObj);
   }
 
-  // ========= Merge + Status =========
+  /* ===== Merge + Status ===== */
   async function mergeParsedIntoStore(parsed, fileRef){
     let data = await readStore(); data = await ensureShape(data);
 
+    // Rechnungen anlegen/ergänzen
     if(parsed.type==='invoice' && parsed.rechnungen?.length){
       for(const rg of parsed.rechnungen){
         const r=data.rechnungen[rg] || {nr:rg, datum:parsed.datum||'', items:[], files:[]};
@@ -370,6 +371,7 @@
       }
     }
 
+    // Paket anlegen/ergänzen
     if(parsed.paket || parsed.kdnr || parsed.items?.length){
       let p = parsed.paket ? (data.pakete||[]).find(x=>x.nr===parsed.paket) : null;
       if(!p){ p={nr:parsed.paket||'unbekannt', datum:parsed.datum||'', status:'offen', rechnungen:[], positionen:[], differenzen:[], files:[]}; data.pakete.push(p); }
@@ -386,9 +388,20 @@
       if(parsed.type==='invoice' && parsed.rechnungen?.length){
         for(const rg of parsed.rechnungen){ if(!p.rechnungen.includes(rg)) p.rechnungen.push(rg); }
       }
-      if(fileRef && parsed.paket){ addFileRefToPackage(data, parsed.paket, fileRef); }
+
+      // <<< WICHTIG: PDF am Paket -> an alle verknüpften Rechnungen spiegeln
+      if(fileRef && parsed.paket){
+        addFileRefToPackage(data, parsed.paket, fileRef);
+        const pkgNow = (data.pakete || []).find(x => x.nr === parsed.paket);
+        if (pkgNow && Array.isArray(pkgNow.rechnungen)) {
+          for (const rg of pkgNow.rechnungen) {
+            addFileRefToInvoice(data, rg, fileRef);
+          }
+        }
+      }
     }
 
+    // Abgleich je Paket
     for (const p of data.pakete) {
       p.differenzen = [];
       const linkedInvoices = (p.rechnungen || []).map(rg => data.rechnungen[rg]).filter(Boolean);
@@ -412,7 +425,7 @@
     return true;
   }
 
-  // ========= Render =========
+  /* ===== Render ===== */
   const inputArea=$('#inputArea'), kdnrSelect=$('#kdnrSelect'), searchInput=$('#searchInput');
   const dateFrom=$('#dateFrom'), dateTo=$('#dateTo'), totals=$('#totals');
   const badgeCount=$('#badgeCount'), badgeMissing=$('#badgeMissing'), badgeSum=$('#badgeSum');
@@ -519,9 +532,8 @@
     $('#overviewInvoices').innerHTML = invs.length ? invs.map(invRowHtml).join('') : '<div class="muted">Keine Rechnungen…</div>';
 
     const s=computeStats({pakete:pkgs}); 
-    const totals=$('#totals'); const badgeCount=$('#badgeCount'); const badgeMissing=$('#badgeMissing'); const badgeSum=$('#badgeSum');
-    if(pkgs.length){ totals.hidden=false; badgeCount.textContent=`${s.pakete} Pakete`; badgeMissing.textContent=`${s.abw} abweichend`; badgeSum.textContent=`Summe: ${fmtEuro(s.sum)}`; } 
-    else { totals.hidden=true; }
+    if(pkgs.length){ $('#totals').hidden=false; $('#badgeCount').textContent=`${s.pakete} Pakete`; $('#badgeMissing').textContent=`${s.abw} abweichend`; $('#badgeSum').textContent=`Summe: ${fmtEuro(s.sum)}`; } 
+    else { $('#totals').hidden=true; }
 
     renderAlertBox(data);
 
@@ -529,6 +541,7 @@
     const cur=kdnrSelect.value; kdnrSelect.innerHTML='<option value="">Alle Kunden</option>'+Array.from(kset).sort().map(k=>`<option>${k}</option>`).join('');
     if(cur && Array.from(kset).includes(cur)) kdnrSelect.value=cur;
 
+    // Rechnung-Links per Chip öffnen (falls im Paket angezeigt)
     document.querySelectorAll('[data-open-rg]').forEach(a=>{
       a.addEventListener('click',e=>{
         e.preventDefault();
@@ -540,7 +553,7 @@
     });
   }
 
-  // ========= Datei-Import =========
+  /* ===== Datei-Import ===== */
   document.getElementById('importBtn').addEventListener('click',()=>document.getElementById('importFile').click());
   document.getElementById('importFile').addEventListener('change',async e=>{for(const f of Array.from(e.target.files||[])) await handleFile(f); e.target.value='';});
   const dropZone=document.getElementById('dropZone');
@@ -573,11 +586,12 @@
       const text=await pdfBlobToText(file);
       let parsed = scanTextForFields(text);
 
+      // RG aus Dateiname + Text
       const rgFromName = extractInvoiceNumbersFromFileName(file.name);
       const allRg = new Set([...(parsed.rechnungen || []), ...rgFromName]);
 
+      // Fallbacks
       let store = await readStore(); store = await ensureShape(store);
-
       if (allRg.size === 0 && parsed.paket) {
         const pkg = (store.pakete || []).find(p => p.nr === parsed.paket);
         if (pkg && Array.isArray(pkg.rechnungen) && pkg.rechnungen.length) {
@@ -596,6 +610,7 @@
 
       const fileRef = {name:file.name, url, type:'pdf', source:'upload'};
 
+      // an Rechnung(en) hängen
       if (allRg.size > 0) {
         for (const rg of allRg) {
           let d=await readStore(); d=await ensureShape(d);
@@ -605,9 +620,15 @@
         parsed.rechnungen = Array.from(allRg);
         parsed.type = 'invoice';
       }
-      if(parsed.paket){
-        let d=await readStore(); d=await ensureShape(d);
+
+      // an Paket hängen UND an dessen Rechnungen spiegeln
+      if (parsed.paket) {
+        let d = await readStore(); d = await ensureShape(d);
         addFileRefToPackage(d, parsed.paket, fileRef);
+        const pkg = (d.pakete || []).find(p => p.nr === parsed.paket);
+        if (pkg && Array.isArray(pkg.rechnungen)) {
+          for (const rg of pkg.rechnungen) addFileRefToInvoice(d, rg, fileRef);
+        }
         await writeStore(d);
       }
 
@@ -618,7 +639,7 @@
     toast('Dateityp nicht unterstützt');
   }
 
-  // ========= Export =========
+  /* ===== Export ===== */
   function exportJSONdata(data){ const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remi-export.json'; a.click(); }
   function exportCSV(data){
     const rows=[['Kdnr','Paket','Datum','Status','Rechnungen','Summe']];
@@ -642,7 +663,7 @@
     const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remi-differenzen.csv'; a.click();
   }
 
-  // ========= Buttons & Filter =========
+  /* ===== Buttons & Filter ===== */
   document.getElementById('forceUpdate').addEventListener('click', async ()=>{
     try{
       if('serviceWorker' in navigator){const r=await navigator.serviceWorker.getRegistrations();for(const x of r) await x.unregister();}
@@ -650,7 +671,7 @@
     }catch(e){}
     toast('Update erzwungen – neu laden…'); setTimeout(()=>location.reload(true),600);
   });
-  document.getElementById('toggleMissing').addEventListener('click', async ()=>{ onlyMissing=!onlyMissing; toast(onlyMissing?'Nur abweichende…':'Alle anzeigen'); render(await readStore()); });
+  document.getElementById('toggleMissing').addEventListener('click', async ()=>{ window.onlyMissing=!window.onlyMissing; toast(window.onlyMissing?'Nur abweichende…':'Alle anzeigen'); render(await readStore()); });
   document.getElementById('clearSearch').addEventListener('click', async ()=>{ document.getElementById('searchInput').value=''; document.getElementById('dateFrom').value=''; document.getElementById('dateTo').value=''; toast('Filter zurückgesetzt'); render(await readStore()); });
   document.getElementById('saveBtn').addEventListener('click', async ()=>{ try{let obj=JSON.parse(document.getElementById('inputArea').value||'{}'); obj=pruneOld(await ensureShape(obj||{kundennummer:'',pakete:[],rechnungen:{}})); await writeStore(obj); toast('Gespeichert ✅'); render(obj);}catch(e){toast('JSON-Fehler: '+e.message);} });
   document.getElementById('loadBtn').addEventListener('click', async ()=>{ let d=await readStore(); d=pruneOld(d); await writeStore(d); document.getElementById('inputArea').value=JSON.stringify(d,null,2); toast('Geladen ✅'); render(d); });
@@ -661,7 +682,7 @@
   document.getElementById('exportDiffCsv').addEventListener('click', async ()=>exportDiffCSV(await readStore()));
   document.getElementById('settingsSave').addEventListener('click', async ()=>{ const s={allowed1:document.getElementById('allowed1').value.trim(),allowed2:document.getElementById('allowed2').value.trim(),allowed3:document.getElementById('allowed3').value.trim(),keywords:document.getElementById('keywords').value.trim()||'Remission,Rechnung'}; await set(SETTINGS_KEY,s); toast('Einstellungen gespeichert ✅'); });
 
-  // ========= Gmail =========
+  /* ===== Gmail ===== */
   document.getElementById('gmailConnect').addEventListener('click',()=>{
     if(!window.google?.accounts?.oauth2){ toast("Google API nicht geladen – neu laden"); return; }
     gisClient=google.accounts.oauth2.initTokenClient({
@@ -735,7 +756,7 @@
     }catch(e){ console.error(e); toast('Gmail-Fehler: '+(e.message||e)); }
   });
 
-  // ========= „PDF hinzufügen“ (Rechnung) =========
+  /* ===== „PDF hinzufügen“ (Rechnung) ===== */
   document.addEventListener('click', async (e)=>{
     const btn = e.target.closest('.attachPdfBtn');
     if (!btn) return;
@@ -763,7 +784,17 @@
     toast(`PDF zu RG ${rg} verknüpft ✅`);
   });
 
-  // ========= Init =========
+  /* ===== WICHTIG: Links in <summary> zuverlässig öffnen ===== */
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('a.rg-link, a.pkg-link');
+    if (!a) return;
+    e.preventDefault();    // verhindert, dass <summary> nur toggelt
+    e.stopPropagation();
+    const href = a.getAttribute('href');
+    if (href && href !== '#') window.open(href, '_blank', 'noopener');
+  });
+
+  /* ===== Init ===== */
   (async ()=>{
     setTab('main');
     await set(SETTINGS_KEY, await readSettings());
@@ -773,7 +804,7 @@
     toast('App geladen ✅');
   })();
 
-  // ========= Admin Login =========
+  /* ===== Admin Login ===== */
   const ADMIN_USER = "admin";
   const ADMIN_PASS = "remi2025";
   document.getElementById("adminLink").addEventListener("click", e=>{
