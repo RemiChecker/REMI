@@ -42,6 +42,9 @@
     footer{margin-top:2rem;padding:1rem 0;border-top:1px solid #ddd;display:flex;justify-content:space-between;align-items:center;font-size:.9rem;color:#666}
     a{color:#0a84ff;text-decoration:none}
     a:hover{text-decoration:underline}
+    /* Alarmbox */
+    .alert{display:none;margin:.6rem 0;padding:.6rem .8rem;border:1px solid #ffd6d6;background:#fff2f2;color:#a40000;border-radius:.6rem}
+    .alert b{color:#a40000}
   </style>
 
   <!-- Libs -->
@@ -70,6 +73,8 @@
       <h1>Presse Remi – Abgleich</h1>
       <div class="muted">Lokale Speicherung. Offline nutzbar.</div>
       <div class="banner">ℹ️ Rechnungen & Remissionen werden nur <u>3 Monate</u> intern gespeichert. Ältere Einträge werden automatisch gelöscht.</div>
+      <!-- Neu: Abweichungs-Alarmbox -->
+      <div id="alertBox" class="alert"></div>
     </div>
     <div style="margin-left:auto;display:flex;gap:.5rem;align-items:center;">
       <button id="forceUpdate">Update erzwingen</button>
@@ -200,7 +205,7 @@ TABS.forEach(t=>t.addEventListener('click',()=>setTab(t.dataset.tab)));
 /* ===== 3) Speicher (IndexedDB / localStorage) ===== */
 const __idb = window.idbKeyval || { get: async k=>JSON.parse(localStorage.getItem(k)||'null'), set: async (k,v)=>localStorage.setItem(k,JSON.stringify(v)), del: async k=>localStorage.removeItem(k) };
 const {get,set,del}=__idb;
-const KEY='presse-remi-daten-v11', SETTINGS_KEY='presse-remi-settings-v10';
+const KEY='presse-remi-daten-v12', SETTINGS_KEY='presse-remi-settings-v10';
 async function ensureShape(data){
   data=data||{kundennummer:'',pakete:[],rechnungen:{}};
   data.pakete ||= [];
@@ -347,16 +352,21 @@ async function mergeParsedIntoStore(parsed, fileRef){
     if(fileRef && parsed.paket){ addFileRefToPackage(data, parsed.paket, fileRef); }
   }
 
-  // Abgleich je Paket ↔ Rechnung(en)
-  for(const p of data.pakete){
-    p.differenzen=[];
-    for(const rg of (p.rechnungen||[])){
-      const r=data.rechnungen[rg]; if(!r) continue;
-      const diffs=diffItems(p.positionen||[], r.items||[]);
-      p.differenzen.push({rg, ...diffs});
-      const hasIssues = diffs.missing.length || diffs.extra.length || diffs.mismatch.length;
-      if(hasIssues) p.status='abweichung'; else if(p.status==='abweichung') p.status='offen';
+  // Abgleich je Paket ↔ Rechnung(en) + Status
+  for (const p of data.pakete) {
+    p.differenzen = [];
+    const linkedInvoices = (p.rechnungen || []).map(rg => data.rechnungen[rg]).filter(Boolean);
+    if (!linkedInvoices.length) { p.status = 'offen'; continue; }
+
+    let hasIssues = false;
+    for (const rg of (p.rechnungen || [])) {
+      const r = data.rechnungen[rg];
+      if (!r) continue;
+      const diffs = diffItems(p.positionen || [], r.items || []);
+      p.differenzen.push({ rg, ...diffs });
+      if (diffs.missing.length || diffs.extra.length || diffs.mismatch.length) hasIssues = true;
     }
+    p.status = hasIssues ? 'abweichung' : 'ok';
   }
 
   data = pruneOld(data);
@@ -366,10 +376,11 @@ async function mergeParsedIntoStore(parsed, fileRef){
   return true;
 }
 
-/* ===== 9) Render: getrennte Listen + PDF-Links ===== */
+/* ===== 9) Render: getrennte Listen + PDF-Links + Alarmbox ===== */
 const inputArea=$('#inputArea'), kdnrSelect=$('#kdnrSelect'), searchInput=$('#searchInput');
 const dateFrom=$('#dateFrom'), dateTo=$('#dateTo'), totals=$('#totals');
 const badgeCount=$('#badgeCount'), badgeMissing=$('#badgeMissing'), badgeSum=$('#badgeSum');
+const alertBox=$('#alertBox');
 let onlyMissing=false;
 
 function computeStats(data){
@@ -398,21 +409,26 @@ function pkgRowHtml(p,k){
   }).join('') || '<div class="muted">Keine Abgleiche</div>';
 
   const firstPdf = (p.files&&p.files[0]) ? p.files[0].url : null;
+  const statusLabel = p.status === 'ok' ? 'ok' : (p.status || '');
 
   return `<details class="card" ${hasIssues?'open':''}>
     <summary class="row">
       <div><a href="${firstPdf||'#'}" ${firstPdf?'target="_blank" rel="noopener"':''} class="pkg-link" data-paket="${p.nr}"><b>Paket ${p.nr||''}</b></a></div>
       <div class="muted">${p.datum||''}</div>
       <div>${re||'<span class="muted">–</span>'}</div>
-      <div class="muted" style="color:${hasIssues?'#c00':'inherit'}">${hasIssues?'abweichung':(p.status||'')}</div>
+      <div class="muted" style="color:${p.status==='abweichung'?'#c00':'inherit'}">${statusLabel}</div>
     </summary>
     <div style="margin:.4rem 0 .2rem"><b>PDFs:</b> ${filesHtml(p.files)}</div>
-    ${diffs}
+    ${ p.status==='offen'
+        ? '<div class="muted" style="margin-top:.4rem">Noch keine Rechnung verknüpft – Abgleich nicht möglich.</div>'
+        : diffs
+      }
   </details>`;
 }
 function invRowHtml(r){
   const firstPdf = (r.files&&r.files[0]) ? r.files[0].url : null;
   const items = (r.items||[]).slice(0,12).map(it=>`<li><b>${it.code||''}</b> – ${it.title||''} • Menge: ${it.qty??''}</li>`).join('');
+  const noPdfHint = (!r.files || !r.files.length) ? '<div class="muted">Keine PDF verknüpft</div>' : '';
   return `<details class="card">
     <summary class="row">
       <div><a href="${firstPdf||'#'}" ${firstPdf?'target="_blank" rel="noopener"':''} class="rg-link" data-rg="${r.nr}"><b>RG ${r.nr}</b></a></div>
@@ -420,8 +436,27 @@ function invRowHtml(r){
       <div>${filesHtml(r.files)}</div>
       <div class="muted">Positionen: ${(r.items||[]).length}</div>
     </summary>
+    ${noPdfHint}
+    <div style="margin:.4rem 0 .2rem">
+      <button class="attachPdfBtn" data-rg="${r.nr}">PDF hinzufügen</button>
+      <input type="file" accept="application/pdf" class="attachPdfInput" data-rg="${r.nr}" style="display:none">
+    </div>
     ${ items ? `<ul style="margin:.4rem 0 .2rem 1rem">${items}${(r.items||[]).length>12?'<li class="muted">…</li>':''}</ul>` : '<div class="muted">Keine Positionen erkannt</div>'}
   </details>`;
+}
+function renderAlertBox(data){
+  const pkgs = (data.pakete||[]);
+  const bad = pkgs.filter(p => p.status==='abweichung');
+  if(bad.length){
+    alertBox.style.display='block';
+    const maxShow = 6;
+    const list = bad.slice(0,maxShow).map(p=>`<li>Paket <b>${p.nr}</b> (${p.datum||'–'}) – Rechnungen: ${(p.rechnungen||[]).join(', ')||'–'}</li>`).join('');
+    alertBox.innerHTML = `<b>⚠️ Abweichungen:</b> ${bad.length} Paket(e) betroffen.
+      <ul style="margin:.4rem 0 .2rem 1rem">${list}${bad.length>maxShow?'<li class="muted">…</li>':''}</ul>`;
+  }else{
+    alertBox.style.display='none';
+    alertBox.innerHTML='';
+  }
 }
 function render(data){
   // Filter
@@ -447,7 +482,7 @@ function render(data){
       && (!f && !t ? true : (d && (!f || d>=new Date(f+'T00:00:00')) && (!t || d<=new Date(t+'T23:59:59'))));
   });
 
-  // Render
+  // Render Listen
   $('#overviewPackages').innerHTML = pkgs.length ? pkgs.map(p=>pkgRowHtml(p,p._k)).join('') : '<div class="muted">Keine Pakete…</div>';
   $('#overviewInvoices').innerHTML = invs.length ? invs.map(invRowHtml).join('') : '<div class="muted">Keine Rechnungen…</div>';
 
@@ -460,6 +495,9 @@ function render(data){
   const kset=new Set(); if(data.kundennummer) kset.add(String(data.kundennummer)); (data.pakete||[]).forEach(p=>{ if(p.kundennummer) kset.add(String(p.kundennummer)); });
   const cur=kdnrSelect.value; kdnrSelect.innerHTML='<option value="">Alle Kunden</option>'+Array.from(kset).sort().map(k=>`<option>${k}</option>`).join('');
   if(cur && Array.from(kset).includes(cur)) kdnrSelect.value=cur;
+
+  // Alarmbox aktualisieren
+  renderAlertBox(data);
 
   // Klick-Handler für RG-Chips (in Paketkarte → Rechnung öffnen)
   document.querySelectorAll('[data-open-rg]').forEach(a=>{
@@ -507,10 +545,34 @@ async function handleFile(file){
     const parsed = scanTextForFields(text);
 
     const fileRef = {name:file.name, url, type:'pdf', source:'upload'};
-    if(parsed.rechnungen?.length){
-      for(const rg of parsed.rechnungen){ let d=await readStore(); d=await ensureShape(d); addFileRefToInvoice(d, rg, fileRef); await writeStore(d); }
+
+    // NEU: Rechnungsnummer auch aus Dateiname ziehen
+    const fileNameRgMatches = Array.from((file.name || '').matchAll(/\b(\d{6,})\b/g)).map(m => m[1]);
+    const allRg = new Set([...(parsed.rechnungen || []), ...fileNameRgMatches]);
+
+    // NEU: Fallback – genau 1 Rechnung im System
+    let store = await readStore(); store = await ensureShape(store);
+    if (allRg.size === 0) {
+      const rgKeys = Object.keys(store.rechnungen || {});
+      if (rgKeys.length === 1) allRg.add(rgKeys[0]);
     }
-    if(parsed.paket){ let d=await readStore(); d=await ensureShape(d); addFileRefToPackage(d, parsed.paket, fileRef); await writeStore(d); }
+
+    // Datei an Rechnung(en) hängen
+    if (allRg.size > 0) {
+      for (const rg of allRg) {
+        let d=await readStore(); d=await ensureShape(d);
+        addFileRefToInvoice(d, rg, fileRef);
+        await writeStore(d);
+      }
+      parsed.rechnungen = Array.from(allRg);
+    }
+
+    // Datei an Paket hängen (falls erkannt)
+    if(parsed.paket){
+      let d=await readStore(); d=await ensureShape(d);
+      addFileRefToPackage(d, parsed.paket, fileRef);
+      await writeStore(d);
+    }
 
     await mergeParsedIntoStore(parsed, fileRef);
     toast('PDF importiert ✅'); return;
@@ -632,7 +694,35 @@ document.getElementById('gmailFetch').addEventListener('click', async ()=>{
   }catch(e){ console.error(e); toast('Gmail-Fehler: '+(e.message||e)); }
 });
 
-/* ===== 14) Init ===== */
+/* ===== 14) Delegation: „PDF hinzufügen“ an Rechnung ===== */
+document.addEventListener('click', async (e)=>{
+  const btn = e.target.closest('.attachPdfBtn');
+  if (!btn) return;
+  const rg = btn.getAttribute('data-rg');
+  const input = document.querySelector(`.attachPdfInput[data-rg="${rg}"]`);
+  if (input) input.click();
+});
+document.addEventListener('change', async (e)=>{
+  const inp = e.target.closest('.attachPdfInput');
+  if (!inp || !inp.files || !inp.files[0]) return;
+  const rg = inp.getAttribute('data-rg');
+  const file = inp.files[0];
+
+  const url = URL.createObjectURL(file);
+  const text = await pdfBlobToText(file);
+  const parsed = scanTextForFields(text);
+  parsed.rechnungen = Array.from(new Set([...(parsed.rechnungen||[]), rg]));
+
+  const fileRef = { name: file.name, url, type: 'pdf', source: 'manual' };
+  let d = await readStore(); d = await ensureShape(d);
+  addFileRefToInvoice(d, rg, fileRef);
+  await writeStore(d);
+
+  await mergeParsedIntoStore(parsed, fileRef);
+  toast(`PDF zu RG ${rg} verknüpft ✅`);
+});
+
+/* ===== 15) Init ===== */
 (async ()=>{
   setTab('main');
   await set(SETTINGS_KEY, await readSettings());
@@ -642,7 +732,7 @@ document.getElementById('gmailFetch').addEventListener('click', async ()=>{
   toast('App geladen ✅');
 })();
 
-/* ===== 15) Admin Login ===== */
+/* ===== 16) Admin Login ===== */
 const ADMIN_USER = "admin";
 const ADMIN_PASS = "remi2025";
 document.getElementById("adminLink").addEventListener("click", e=>{
