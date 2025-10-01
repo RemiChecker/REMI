@@ -44,7 +44,7 @@
     a:hover{text-decoration:underline}
     .alert{display:none;margin:.6rem 0;padding:.6rem .8rem;border:1px solid #ffd6d6;background:#fff2f2;color:#a40000;border-radius:.6rem}
     .alert b{color:#a40000}
-    .kbd{font: .85rem ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#f5f5f7;border:1px solid #ddd;border-radius:.35rem;padding:.05rem .35rem}
+    .kbd{font:.85rem ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#f5f5f7;border:1px solid #ddd;border-radius:.35rem;padding:.05rem .35rem}
   </style>
 
   <!-- IndexedDB helper -->
@@ -186,625 +186,614 @@
   </section>
 
   <script>
-/* ===== 0) Google Client-ID ===== */
-const GOOGLE_CLIENT_ID = "836994805779-78af1p2hpubkidbklko086s93j165lv5.apps.googleusercontent.com";
-let gisClient=null, accessToken=null;
+  // ========= Fehler sichtbar machen =========
+  window.addEventListener('error', (e)=> {
+    const el = document.getElementById('toast');
+    el.textContent = 'Fehler: ' + (e?.message || e.toString());
+    el.style.display = 'block';
+  });
 
-/* ===== 1) Tabs ===== */
-const TABS=[...document.querySelectorAll('.tab')], VIEWS=[...document.querySelectorAll('section[data-view]')];
-function setTab(name){TABS.forEach(t=>t.classList.toggle('active',t.dataset.tab===name)); VIEWS.forEach(v=>v.style.display=v.dataset.view===name?'':'none');}
-TABS.forEach(t=>t.addEventListener('click',()=>setTab(t.dataset.tab)));
+  // ========= Google Client-ID =========
+  const GOOGLE_CLIENT_ID = "836994805779-78af1p2hpubkidbklko086s93j165lv5.apps.googleusercontent.com";
+  let gisClient=null, accessToken=null;
 
-/* ===== 2) Auto-Clean SW/Cache bei Start ===== */
-(async()=>{try{
-  if('serviceWorker' in navigator){const r=await navigator.serviceWorker.getRegistrations();for(const x of r) await x.unregister();}
-  if('caches' in window){const k=await caches.keys();await Promise.all(k.map(c=>caches.delete(c)));}
-}catch(e){}})();
+  // ========= Tabs =========
+  const TABS=[...document.querySelectorAll('.tab')], VIEWS=[...document.querySelectorAll('section[data-view]')];
+  function setTab(name){TABS.forEach(t=>t.classList.toggle('active',t.dataset.tab===name)); VIEWS.forEach(v=>v.style.display=v.dataset.view===name?'':'none');}
+  TABS.forEach(t=>t.addEventListener('click',()=>setTab(t.dataset.tab)));
 
-/* ===== 3) Speicher (IndexedDB / localStorage) ===== */
-const __idb = window.idbKeyval || { get: async k=>JSON.parse(localStorage.getItem(k)||'null'), set: async (k,v)=>localStorage.setItem(k,JSON.stringify(v)), del: async k=>localStorage.removeItem(k) };
-const {get,set,del}=__idb;
-const KEY='presse-remi-daten-v13', SETTINGS_KEY='presse-remi-settings-v10';
+  // ========= Cache sauber halten =========
+  (async()=>{try{
+    if('serviceWorker' in navigator){const r=await navigator.serviceWorker.getRegistrations();for(const x of r) await x.unregister();}
+    if('caches' in window){const k=await caches.keys();await Promise.all(k.map(c=>caches.delete(c)));}
+  }catch(e){}})();
 
-async function ensureShape(data){
-  data=data||{kundennummer:'',pakete:[],rechnungen:{}};
-  data.pakete ||= [];
-  data.rechnungen ||= {};
-  for(const p of data.pakete){ p.files ||= []; p.positionen ||= []; p.rechnungen ||= []; p.differenzen ||= []; }
-  for(const k of Object.keys(data.rechnungen)){ data.rechnungen[k].files ||= []; data.rechnungen[k].items ||= []; }
-  return data;
-}
-const readStore=async()=> ensureShape(await get(KEY));
-const writeStore=async(o)=> set(KEY, await ensureShape(o));
-const readSettings=()=>get(SETTINGS_KEY).then(x=>x||{allowed1:'',allowed2:'',allowed3:'',keywords:'Remission,Rechnung'});
+  // ========= Speicher (IndexedDB) =========
+  const __idb = window.idbKeyval || { get: async k=>JSON.parse(localStorage.getItem(k)||'null'), set: async (k,v)=>localStorage.setItem(k,JSON.stringify(v)), del: async k=>localStorage.removeItem(k) };
+  const {get,set,del}=__idb;
+  const KEY='presse-remi-daten-v13', SETTINGS_KEY='presse-remi-settings-v10';
 
-/* ===== 4) Utils ===== */
-const $=sel=>document.querySelector(sel);
-const toast=m=>{const el=document.getElementById('toast');el.textContent=m;el.style.display='block';setTimeout(()=>el.style.display='none',2500);};
-const norm=s=>(s||'').toString().toLowerCase();
-const parseDateAny=s=>s && /^\d{4}-\d{2}-\d{2}$/.test(s)?new Date(s+'T00:00:00'):null;
-function threeMonthsAgo(){const d=new Date();d.setMonth(d.getMonth()-3);d.setHours(0,0,0,0);return d;}
-function pruneOld(data){const c=threeMonthsAgo();data.pakete=(data.pakete||[]).filter(p=>{const d=parseDateAny(p.datum);return d && d>=c;});return data;}
-const fmtEuro=n=>typeof n==='number'?new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(n):'';
-function colorFor(str){ str=String(str||''); let h=0; for(let i=0;i<str.length;i++) h=(h*31 + str.charCodeAt(i))>>>0; const hues=[0,210,40,280,160,330,20,200,90,260,120,300,30,180,240]; const hue=hues[h%hues.length]; return `hsl(${hue} 75% 45%)`; }
-function chipStyleFor(str){ const c=colorFor(str); return `color:${c};border-color:${c};background:color-mix(in hsl, ${c} 12%, white);`; }
-const decodeB64Url = s => { try { return atob(String(s||'').replace(/-/g,'+').replace(/_/g,'/')); } catch { return ''; } };
-
-/* ===== 5) Robuste Rechnungsnummer-Erkennung ===== */
-function extractInvoiceNumbersFromText(txt){
-  if(!txt) return [];
-  const out = new Set();
-  const patterns = [
-    /rechnungs?(?:nr|nummer)?\s*[:\-]?\s*(\d{5,12})/ig, // "Rechnungsnr: 123456"
-    /\brg\s*[:\-]?\s*(\d{5,12})\b/ig,                   // "RG 123456"
-    /\brechnung\s*[:\-]?\s*(\d{5,12})\b/ig,             // "Rechnung 123456"
-    /\bbeleg(?:nr)?\s*[:\-]?\s*(\d{5,12})\b/ig,         // "Belegnr 123456"
-    /\bR-?G[\s:_-]*?(\d{5,12})\b/ig                     // "R-G_123456"
-  ];
-  for(const re of patterns){ for(const m of txt.matchAll(re)) out.add(m[1]); }
-
-  // vorsichtige nackte Zahlen (6-12-stellig)
-  for(const m of txt.matchAll(/\b(\d{6,12})\b/g)){
-    const num = m[1];
-    if(/^20\d{6,}$/.test(num)) continue; // lange Datums-/Zeitstempel skippen
-    out.add(num);
+  async function ensureShape(data){
+    data=data||{kundennummer:'',pakete:[],rechnungen:{}};
+    data.pakete ||= [];
+    data.rechnungen ||= {};
+    for(const p of data.pakete){ p.files ||= []; p.positionen ||= []; p.rechnungen ||= []; p.differenzen ||= []; }
+    for(const k of Object.keys(data.rechnungen)){ data.rechnungen[k].files ||= []; data.rechnungen[k].items ||= []; }
+    return data;
   }
-  return Array.from(out);
-}
-function extractInvoiceNumbersFromFileName(name){
-  if(!name) return [];
-  const base = name.replace(/\.[a-z0-9]+$/i,'');
-  const out = new Set();
-  const patterns = [
-    /\b(?:rg|rechnung|rechn|beleg)[\s:_-]*?(\d{5,12})\b/ig,
-    /\b(\d{6,12})\b/g
-  ];
-  for(const re of patterns){ for(const m of base.matchAll(re)) out.add(m[1]); }
-  return Array.from(out);
-}
+  const readStore=async()=> ensureShape(await get(KEY));
+  const writeStore=async(o)=> set(KEY, await ensureShape(o));
+  const readSettings=()=>get(SETTINGS_KEY).then(x=>x||{allowed1:'',allowed2:'',allowed3:'',keywords:'Remission,Rechnung'});
 
-/* ===== 6) Parser (PDF/EML/Text → Felder & Positionen) ===== */
-function scanTextForFields(t){
-  if(!t) return {};
-  const paket=(t.match(/(?:paket(?:nr|nummer)?|paket)\s*[-: ]\s*([0-9]{3,})/i) || t.match(/\bPaket\s*([0-9]{3,})\b/i))?.[1];
-  const kdnr=(t.match(/kunden(?:nr|nummer)?\s*[-: ]\s*([0-9]{3,})/i) || t.match(/\bKdnr\.?\s*([0-9]{3,})\b/i))?.[1];
+  // ========= Utils =========
+  const $=sel=>document.querySelector(sel);
+  const toast=m=>{const el=document.getElementById('toast');el.textContent=m;el.style.display='block';setTimeout(()=>el.style.display='none',2500);};
+  const norm=s=>(s||'').toString().toLowerCase();
+  const parseDateAny=s=>s && /^\d{4}-\d{2}-\d{2}$/.test(s)?new Date(s+'T00:00:00'):null;
+  function threeMonthsAgo(){const d=new Date();d.setMonth(d.getMonth()-3);d.setHours(0,0,0,0);return d;}
+  function pruneOld(data){const c=threeMonthsAgo();data.pakete=(data.pakete||[]).filter(p=>{const d=parseDateAny(p.datum);return d && d>=c;});return data;}
+  const fmtEuro=n=>typeof n==='number'?new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(n):'';
+  function colorFor(str){ str=String(str||''); let h=0; for(let i=0;i<str.length;i++) h=(h*31 + str.charCodeAt(i))>>>0; const hues=[0,210,40,280,160,330,20,200,90,260,120,300,30,180,240]; const hue=hues[h%hues.length]; return `hsl(${hue} 75% 45%)`; }
+  function chipStyleFor(str){ const c=colorFor(str); return `color:${c};border-color:${c};background:color-mix(in hsl, ${c} 12%, white);`; }
+  const decodeB64Url = s => { try { return atob(String(s||'').replace(/-/g,'+').replace(/_/g,'/')); } catch { return ''; } };
 
-  const rgHits = extractInvoiceNumbersFromText(t);
-
-  const iso=(t.match(/(20[2-5][0-9]-[01][0-9]-[0-3][0-9])/))?.[1];
-  const de=(t.match(/([0-3][0-9]\.[01][0-9]\.20[2-5][0-9])/))?.[1];
-  const datum=iso || (de ? de.split('.').reverse().join('-') : '');
-
-  const isInvoice = /rechnung|rechnungsnummer|rg[- :]?\d+/i.test(t) && !/gutschrift/i.test(t);
-  const isRemi    = /remission|remi[- ]?liste|rückgabe|gutschrift/i.test(t) || !isInvoice;
-
-  // Artikelzeilen (ein-/zweizeilig)
-  const lines = t.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-  const asNumber = s => { if(!s) return null; s=s.replace(/\s/g,'').replace(/\./g,'').replace(/,/g,'.'); const v=parseFloat(s); return isFinite(v)?v:null; };
-  const items=[];
-  for(let i=0;i<lines.length;i++){
-    const L=lines[i];
-    // Einzeilig
-    let m = L.match(/^(\d{8,14}|[A-Z0-9][A-Z0-9._-]{2,})\s+(.+?)\s+(\d{1,6})\s+(\d+[.,]\d{2})\s+(\d+[.,]\d{2})$/i);
-    if(m){ const [_, code, title, qty, unit, total]=m; items.push({code, title, qty:+qty, unit:asNumber(unit), total:asNumber(total)}); continue; }
-    // Zweizeilig
-    let m1=L.match(/^(\d{8,14}|[A-Z0-9][A-Z0-9._-]{2,})\s+(.+)$/i);
-    if(m1 && i+1<lines.length){
-      const L2=lines[i+1];
-      let m2 = L2.match(/^(\d{1,6})\s*(?:x|×)?\s*(\d+[.,]\d{2})\s*(?:=|≈)?\s*(\d+[.,]\d{2})$/i)
-             || L2.match(/^(\d{1,6})\s+(\d+[.,]\d{2})\s+(\d+[.,]\d{2})$/i);
-      if(m2){ const [__, qty, unit, total]=m2; items.push({code:m1[1], title:m1[2], qty:+qty, unit:asNumber(unit), total:asNumber(total)}); i++; continue; }
+  // ========= RG-Nummern erkennen =========
+  function extractInvoiceNumbersFromText(txt){
+    if(!txt) return [];
+    const out = new Set();
+    const patterns = [
+      /rechnungs?(?:nr|nummer)?\s*[:\-]?\s*(\d{5,12})/ig,
+      /\brg\s*[:\-]?\s*(\d{5,12})\b/ig,
+      /\brechnung\s*[:\-]?\s*(\d{5,12})\b/ig,
+      /\bbeleg(?:nr)?\s*[:\-]?\s*(\d{5,12})\b/ig,
+      /\bR-?G[\s:_-]*?(\d{5,12})\b/ig
+    ];
+    for(const re of patterns){ for(const m of txt.matchAll(re)) out.add(m[1]); }
+    for(const m of txt.matchAll(/\b(\d{6,12})\b/g)){
+      const num=m[1];
+      if(/^20\d{6,}$/.test(num)) continue;
+      out.add(num);
     }
+    return Array.from(out);
+  }
+  function extractInvoiceNumbersFromFileName(name){
+    if(!name) return [];
+    const base = name.replace(/\.[a-z0-9]+$/i,'');
+    const out = new Set();
+    const patterns = [
+      /\b(?:rg|rechnung|rechn|beleg)[\s:_-]*?(\d{5,12})\b/ig,
+      /\b(\d{6,12})\b/g
+    ];
+    for(const re of patterns){ for(const m of base.matchAll(re)) out.add(m[1]); }
+    return Array.from(out);
   }
 
-  return { paket, kdnr, rechnungen: rgHits, datum, type: isInvoice ? 'invoice' : (isRemi ? 'remission' : 'unknown'), items };
-}
-async function pdfBlobToText(blob){
-  const arr=await blob.arrayBuffer();
-  const pdf=await pdfjsLib.getDocument({data:arr}).promise;
-  let t=''; 
-  for(let i=1;i<=pdf.numPages;i++){
-    const page=await pdf.getPage(i);
-    const c=await page.getTextContent();
-    t+=c.items.map(it=>it.str).join(' ')+'\n';
-  }
-  return t;
-}
+  // ========= Parser =========
+  function scanTextForFields(t){
+    if(!t) return {};
+    const paket=(t.match(/(?:paket(?:nr|nummer)?|paket)\s*[-: ]\s*([0-9]{3,})/i) || t.match(/\bPaket\s*([0-9]{3,})\b/i))?.[1];
+    const kdnr=(t.match(/kunden(?:nr|nummer)?\s*[-: ]\s*([0-9]{3,})/i) || t.match(/\bKdnr\.?\s*([0-9]{3,})\b/i))?.[1];
 
-/* ===== 7) Abgleich (Remi ↔ Rechnung) ===== */
-function diffItems(remiItems, invItems){
-  const idx = arr => {
-    const map=new Map();
-    for(const it of (arr||[])){
-      const key=(it.code||'').toLowerCase()+'|'+(it.title||'').toLowerCase();
-      const cur=map.get(key)||{qty:0,unit:null,total:0};
-      cur.qty += Number(it.qty||0);
-      cur.unit = cur.unit ?? it.unit ?? null;
-      cur.total = (cur.total||0) + (Number(it.total||0)||0);
-      map.set(key,cur);
+    const rgHits = extractInvoiceNumbersFromText(t);
+
+    const iso=(t.match(/(20[2-5][0-9]-[01][0-9]-[0-3][0-9])/))?.[1];
+    const de=(t.match(/([0-3][0-9]\.[01][0-9]\.20[2-5][0-9])/))?.[1];
+    const datum=iso || (de ? de.split('.').reverse().join('-') : '');
+
+    const isInvoice = /rechnung|rechnungsnummer|rg[- :]?\d+/i.test(t) && !/gutschrift/i.test(t);
+    const isRemi    = /remission|remi[- ]?liste|rückgabe|gutschrift/i.test(t) || !isInvoice;
+
+    // Artikelzeilen
+    const lines = t.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+    const asNumber = s => { if(!s) return null; s=s.replace(/\s/g,'').replace(/\./g,'').replace(/,/g,'.'); const v=parseFloat(s); return isFinite(v)?v:null; };
+    const items=[];
+    for(let i=0;i<lines.length;i++){
+      const L=lines[i];
+      let m = L.match(/^(\d{8,14}|[A-Z0-9][A-Z0-9._-]{2,})\s+(.+?)\s+(\d{1,6})\s+(\d+[.,]\d{2})\s+(\d+[.,]\d{2})$/i);
+      if(m){ const [_, code, title, qty, unit, total]=m; items.push({code, title, qty:+qty, unit:asNumber(unit), total:asNumber(total)}); continue; }
+      let m1=L.match(/^(\d{8,14}|[A-Z0-9][A-Z0-9._-]{2,})\s+(.+)$/i);
+      if(m1 && i+1<lines.length){
+        const L2=lines[i+1];
+        let m2 = L2.match(/^(\d{1,6})\s*(?:x|×)?\s*(\d+[.,]\d{2})\s*(?:=|≈)?\s*(\d+[.,]\d{2})$/i)
+               || L2.match(/^(\d{1,6})\s+(\d+[.,]\d{2})\s+(\d+[.,]\d{2})$/i);
+        if(m2){ const [__, qty, unit, total]=m2; items.push({code:m1[1], title:m1[2], qty:+qty, unit:asNumber(unit), total:asNumber(total)}); i++; continue; }
+      }
     }
-    return map;
-  };
-  const R=idx(remiItems), I=idx(invItems);
-  const missing=[], extra=[], mismatch=[];
-  for(const [key,rVal] of R.entries()){
-    if(!I.has(key)){ missing.push({key,expected:rVal}); continue; }
-    const iVal=I.get(key);
-    if(Number(rVal.qty||0)!==Number(iVal.qty||0)){ mismatch.push({key, remiQty:rVal.qty, invQty:iVal.qty}); }
+
+    return { paket, kdnr, rechnungen: rgHits, datum, type: isInvoice ? 'invoice' : (isRemi ? 'remission' : 'unknown'), items };
   }
-  for(const [key,iVal] of I.entries()){ if(!R.has(key)) extra.push({key,found:iVal}); }
-  return {missing, extra, mismatch};
-}
+  async function pdfBlobToText(blob){
+    const arr=await blob.arrayBuffer();
+    const pdf=await pdfjsLib.getDocument({data:arr}).promise;
+    let t=''; 
+    for(let i=1;i<=pdf.numPages;i++){
+      const page=await pdf.getPage(i);
+      const c=await page.getTextContent();
+      t+=c.items.map(it=>it.str).join(' ')+'\n';
+    }
+    return t;
+  }
 
-/* ===== 8) Datei-Referenzen (für PDF-Öffnen) ===== */
-function addFileRefToPackage(data, paketNr, fileObj){
-  let p = (data.pakete||[]).find(x=>x.nr===paketNr);
-  if(!p){ p={nr:paketNr||'unbekannt', datum:'', status:'offen', rechnungen:[], positionen:[], differenzen:[], files:[]}; data.pakete.push(p); }
-  p.files ||= []; p.files.push(fileObj);
-}
-function addFileRefToInvoice(data, rgNr, fileObj){
-  const r = (data.rechnungen[rgNr] ||= {nr:rgNr, datum:'', items:[], files:[]});
-  r.files ||= []; r.files.push(fileObj);
-}
+  // ========= Abgleich =========
+  function diffItems(remiItems, invItems){
+    const idx = arr => {
+      const map=new Map();
+      for(const it of (arr||[])){
+        const key=(it.code||'').toLowerCase()+'|'+(it.title||'').toLowerCase();
+        const cur=map.get(key)||{qty:0,unit:null,total:0};
+        cur.qty += Number(it.qty||0);
+        cur.unit = cur.unit ?? it.unit ?? null;
+        cur.total = (cur.total||0) + (Number(it.total||0)||0);
+        map.set(key,cur);
+      }
+      return map;
+    };
+    const R=idx(remiItems), I=idx(invItems);
+    const missing=[], extra=[], mismatch=[];
+    for(const [key,rVal] of R.entries()){
+      if(!I.has(key)){ missing.push({key,expected:rVal}); continue; }
+      const iVal=I.get(key);
+      if(Number(rVal.qty||0)!==Number(iVal.qty||0)){ mismatch.push({key, remiQty:rVal.qty, invQty:iVal.qty}); }
+    }
+    for(const [key,iVal] of I.entries()){ if(!R.has(key)) extra.push({key,found:iVal}); }
+    return {missing, extra, mismatch};
+  }
 
-/* ===== 9) Merge + Status setzen + Abgleich ===== */
-async function mergeParsedIntoStore(parsed, fileRef){
-  let data = await readStore(); data = await ensureShape(data);
+  // ========= Datei-Referenzen =========
+  function addFileRefToPackage(data, paketNr, fileObj){
+    let p = (data.pakete||[]).find(x=>x.nr===paketNr);
+    if(!p){ p={nr:paketNr||'unbekannt', datum:'', status:'offen', rechnungen:[], positionen:[], differenzen:[], files:[]}; data.pakete.push(p); }
+    p.files ||= []; p.files.push(fileObj);
+  }
+  function addFileRefToInvoice(data, rgNr, fileObj){
+    const r = (data.rechnungen[rgNr] ||= {nr:rgNr, datum:'', items:[], files:[]});
+    r.files ||= []; r.files.push(fileObj);
+  }
 
-  // Rechnungen: global pflegen
-  if(parsed.type==='invoice' && parsed.rechnungen?.length){
-    for(const rg of parsed.rechnungen){
-      const r=data.rechnungen[rg] || {nr:rg, datum:parsed.datum||'', items:[], files:[]};
-      if(parsed.items?.length){
-        const seen=new Set(r.items.map(x=>x.code+'|'+x.title));
+  // ========= Merge + Status =========
+  async function mergeParsedIntoStore(parsed, fileRef){
+    let data = await readStore(); data = await ensureShape(data);
+
+    if(parsed.type==='invoice' && parsed.rechnungen?.length){
+      for(const rg of parsed.rechnungen){
+        const r=data.rechnungen[rg] || {nr:rg, datum:parsed.datum||'', items:[], files:[]};
+        if(parsed.items?.length){
+          const seen=new Set(r.items.map(x=>x.code+'|'+x.title));
+          for(const it of parsed.items){
+            const key=(it.code||'')+'|'+(it.title||'');
+            if(!seen.has(key)){ r.items.push(it); seen.add(key); }
+          }
+        }
+        if(parsed.datum && !r.datum) r.datum = parsed.datum;
+        if(fileRef) addFileRefToInvoice(data, rg, fileRef);
+        data.rechnungen[rg]=r;
+      }
+    }
+
+    if(parsed.paket || parsed.kdnr || parsed.items?.length){
+      let p = parsed.paket ? (data.pakete||[]).find(x=>x.nr===parsed.paket) : null;
+      if(!p){ p={nr:parsed.paket||'unbekannt', datum:parsed.datum||'', status:'offen', rechnungen:[], positionen:[], differenzen:[], files:[]}; data.pakete.push(p); }
+      if(parsed.kdnr){ p.kundennummer = parsed.kdnr; }
+      if(parsed.datum && !p.datum){ p.datum = parsed.datum; }
+
+      if(parsed.type!=='invoice' && parsed.items?.length){
+        const seen=new Set(p.positionen.map(x=>x.code+'|'+x.title));
         for(const it of parsed.items){
           const key=(it.code||'')+'|'+(it.title||'');
-          if(!seen.has(key)){ r.items.push(it); seen.add(key); }
+          if(!seen.has(key)){ p.positionen.push(it); seen.add(key); }
         }
       }
-      if(parsed.datum && !r.datum) r.datum = parsed.datum;
-      if(fileRef) addFileRefToInvoice(data, rg, fileRef);
-      data.rechnungen[rg]=r;
-    }
-  }
-
-  // Paket anlegen/aktualisieren
-  if(parsed.paket || parsed.kdnr || parsed.items?.length){
-    let p = parsed.paket ? (data.pakete||[]).find(x=>x.nr===parsed.paket) : null;
-    if(!p){ p={nr:parsed.paket||'unbekannt', datum:parsed.datum||'', status:'offen', rechnungen:[], positionen:[], differenzen:[], files:[]}; data.pakete.push(p); }
-    if(parsed.kdnr){ p.kundennummer = parsed.kdnr; }
-    if(parsed.datum && !p.datum){ p.datum = parsed.datum; }
-
-    if(parsed.type!=='invoice' && parsed.items?.length){
-      const seen=new Set(p.positionen.map(x=>x.code+'|'+x.title));
-      for(const it of parsed.items){
-        const key=(it.code||'')+'|'+(it.title||'');
-        if(!seen.has(key)){ p.positionen.push(it); seen.add(key); }
+      if(parsed.type==='invoice' && parsed.rechnungen?.length){
+        for(const rg of parsed.rechnungen){ if(!p.rechnungen.includes(rg)) p.rechnungen.push(rg); }
       }
+      if(fileRef && parsed.paket){ addFileRefToPackage(data, parsed.paket, fileRef); }
     }
-    if(parsed.type==='invoice' && parsed.rechnungen?.length){
-      for(const rg of parsed.rechnungen){ if(!p.rechnungen.includes(rg)) p.rechnungen.push(rg); }
-    }
-    if(fileRef && parsed.paket){ addFileRefToPackage(data, parsed.paket, fileRef); }
-  }
 
-  // Abgleich + Status je Paket
-  for (const p of data.pakete) {
-    p.differenzen = [];
-    const linkedInvoices = (p.rechnungen || []).map(rg => data.rechnungen[rg]).filter(Boolean);
-    if (!linkedInvoices.length) { p.status = 'offen'; continue; }
+    for (const p of data.pakete) {
+      p.differenzen = [];
+      const linkedInvoices = (p.rechnungen || []).map(rg => data.rechnungen[rg]).filter(Boolean);
+      if (!linkedInvoices.length) { p.status = 'offen'; continue; }
 
-    let hasIssues = false;
-    for (const rg of (p.rechnungen || [])) {
-      const r = data.rechnungen[rg];
-      if (!r) continue;
-      const diffs = diffItems(p.positionen || [], r.items || []);
-      p.differenzen.push({ rg, ...diffs });
-      if (diffs.missing.length || diffs.extra.length || diffs.mismatch.length) hasIssues = true;
-    }
-    p.status = hasIssues ? 'abweichung' : 'ok';
-  }
-
-  data = pruneOld(data);
-  await writeStore(data);
-  if($('#inputArea')) $('#inputArea').value=JSON.stringify(data,null,2);
-  render(data);
-  return true;
-}
-
-/* ===== 10) Render: getrennte Listen + PDF-Links + Alarmbox ===== */
-const inputArea=$('#inputArea'), kdnrSelect=$('#kdnrSelect'), searchInput=$('#searchInput');
-const dateFrom=$('#dateFrom'), dateTo=$('#dateTo'), totals=$('#totals');
-const badgeCount=$('#badgeCount'), badgeMissing=$('#badgeMissing'), badgeSum=$('#badgeSum');
-const alertBox=$('#alertBox');
-let onlyMissing=false;
-
-function computeStats(data){
-  const list=data.pakete||[]; 
-  const abw=list.filter(p=>(p.differenzen||[]).some(d=>d.missing?.length||d.extra?.length||d.mismatch?.length)).length;
-  const sum=list.reduce((a,p)=>a+(typeof p.summe==='number'?p.summe:0),0);
-  return {pakete:list.length, abw, sum};
-}
-function filesHtml(files){
-  files=files||[];
-  if(!files.length) return '<span class="muted">keine PDF</span>';
-  return files.map((f,i)=>`<a href="${f.url}" target="_blank" rel="noopener">PDF ${i+1}</a>`).join(' • ');
-}
-function pkgRowHtml(p,k){
-  const hasIssues = (p.differenzen||[]).some(x=>x.missing?.length||x.extra?.length||x.mismatch?.length);
-  const re=(p.rechnungen||[]).map(r=>`<a href="#" data-open-rg="${r}" class="chip" style="${chipStyleFor(r)}" title="Rechnung öffnen">${r}</a>`).join('');
-  const diffs = (p.differenzen||[]).map(d=>{
-    const miss = (d.missing||[]).map(m=>{ const [code,title]=String(m.key).split('|'); return `<li>❌ fehlt: <b>${code||''}</b> – ${title||''} (Remi erwartet ${m.expected?.qty??'?'})</li>`; }).join('');
-    const extra = (d.extra||[]).map(e=>{ const [code,title]=String(e.key).split('|'); return `<li>➕ extra: <b>${code||''}</b> – ${title||''} (nur auf Rechnung: ${e.found?.qty??'?'})</li>`; }).join('');
-    const mm = (d.mismatch||[]).map(x=>{ const [code,title]=String(x.key).split('|'); return `<li>⚖️ Menge abw.: <b>${code||''}</b> – ${title||''} (Remi ${x.remiQty??'?'}, Rechn. ${x.invQty??'?'})</li>`; }).join('');
-    const ok = (!miss && !extra && !mm) ? '<div class="muted">✓ Abgleich ok</div>' : '';
-    return `<div class="card" style="margin:.35rem 0;padding:.45rem .6rem;border-left:4px solid ${colorFor(d.rg)}">
-      <div class="muted" style="margin-bottom:.2rem">Abgleich zu RG <b style="color:${colorFor(d.rg)}">${d.rg}</b></div>
-      ${ok || `<ul style="margin:.2rem 0 .2rem 1rem">${miss}${extra}${mm}</ul>`}
-    </div>`;
-  }).join('') || '<div class="muted">Keine Abgleiche</div>';
-
-  const firstPdf = (p.files&&p.files[0]) ? p.files[0].url : null;
-  const statusLabel = p.status === 'ok' ? 'ok' : (p.status || '');
-
-  return `<details class="card" ${hasIssues?'open':''}>
-    <summary class="row">
-      <div><a href="${firstPdf||'#'}" ${firstPdf?'target="_blank" rel="noopener"':''} class="pkg-link" data-paket="${p.nr}"><b>Paket ${p.nr||''}</b></a></div>
-      <div class="muted">${p.datum||''}</div>
-      <div>${re||'<span class="muted">–</span>'}</div>
-      <div class="muted" style="color:${p.status==='abweichung'?'#c00':'inherit'}">${statusLabel}</div>
-    </summary>
-    <div style="margin:.4rem 0 .2rem"><b>PDFs:</b> ${filesHtml(p.files)}</div>
-    ${ p.status==='offen'
-        ? '<div class="muted" style="margin-top:.4rem">Noch keine Rechnung verknüpft – Abgleich nicht möglich.</div>'
-        : diffs
+      let hasIssues = false;
+      for (const rg of (p.rechnungen || [])) {
+        const r = data.rechnungen[rg];
+        if (!r) continue;
+        const diffs = diffItems(p.positionen || [], r.items || []);
+        p.differenzen.push({ rg, ...diffs });
+        if (diffs.missing.length || diffs.extra.length || diffs.mismatch.length) hasIssues = true;
       }
-  </details>`;
-}
-function invRowHtml(r){
-  const firstPdf = (r.files&&r.files[0]) ? r.files[0].url : null;
-  const items = (r.items||[]).slice(0,12).map(it=>`<li><b>${it.code||''}</b> – ${it.title||''} • Menge: ${it.qty??''}</li>`).join('');
-  const noPdfHint = (!r.files || !r.files.length) ? '<div class="muted">Keine PDF verknüpft</div>' : '';
-  return `<details class="card">
-    <summary class="row">
-      <div><a href="${firstPdf||'#'}" ${firstPdf?'target="_blank" rel="noopener"':''} class="rg-link" data-rg="${r.nr}"><b>RG ${r.nr}</b></a></div>
-      <div class="muted">${r.datum||''}</div>
-      <div>${filesHtml(r.files)}</div>
-      <div class="muted">Positionen: ${(r.items||[]).length}</div>
-    </summary>
-    ${noPdfHint}
-    <div style="margin:.4rem 0 .2rem">
-      <button class="attachPdfBtn" data-rg="${r.nr}">PDF hinzufügen</button>
-      <input type="file" accept="application/pdf" class="attachPdfInput" data-rg="${r.nr}" style="display:none">
-    </div>
-    ${ items ? `<ul style="margin:.4rem 0 .2rem 1rem">${items}${(r.items||[]).length>12?'<li class="muted">…</li>':''}</ul>` : '<div class="muted">Keine Positionen erkannt</div>'}
-  </details>`;
-}
-function renderAlertBox(data){
-  const pkgs = (data.pakete||[]);
-  const bad = pkgs.filter(p => p.status==='abweichung');
-  if(bad.length){
-    alertBox.style.display='block';
-    const maxShow = 6;
-    const list = bad.slice(0,maxShow).map(p=>`<li>Paket <b>${p.nr}</b> (${p.datum||'–'}) – Rechnungen: ${(p.rechnungen||[]).join(', ')||'–'}</li>`).join('');
-    alertBox.innerHTML = `<b>⚠️ Abweichungen:</b> ${bad.length} Paket(e) betroffen.
-      <ul style="margin:.4rem 0 .2rem 1rem">${list}${bad.length>maxShow?'<li class="muted">…</li>':''}</ul>`;
-  }else{
-    alertBox.style.display='none';
-    alertBox.innerHTML='';
+      p.status = hasIssues ? 'abweichung' : 'ok';
+    }
+
+    data = pruneOld(data);
+    await writeStore(data);
+    if($('#inputArea')) $('#inputArea').value=JSON.stringify(data,null,2);
+    render(data);
+    return true;
   }
-}
-function render(data){
-  // Filter
-  const gk=data.kundennummer||''; 
-  const q=norm($('#searchInput')?.value), ksel=$('#kdnrSelect')?.value, f=$('#dateFrom')?.value, t=$('#dateTo')?.value;
 
-  // Pakete
-  const allPkgs=(data.pakete||[]).map(p=>({...p,_k:p.kundennummer||gk}));
-  const pkgs=allPkgs.filter(p=>{
-    const d=parseDateAny(p.datum);
-    const issues=(p.differenzen||[]).some(x=>x.missing?.length||x.extra?.length||x.mismatch?.length);
-    return (!ksel || p._k===ksel)
-      && (!q || [p.nr,p.datum,p.status,(p.rechnungen||[]).join(' '),p._k].some(x=>norm(x).includes(q)))
-      && (!onlyMissing || issues)
-      && (!f && !t ? true : (d && (!f || d>=new Date(f+'T00:00:00')) && (!t || d<=new Date(t+'T23:59:59'))));
-  });
+  // ========= Render =========
+  const inputArea=$('#inputArea'), kdnrSelect=$('#kdnrSelect'), searchInput=$('#searchInput');
+  const dateFrom=$('#dateFrom'), dateTo=$('#dateTo'), totals=$('#totals');
+  const badgeCount=$('#badgeCount'), badgeMissing=$('#badgeMissing'), badgeSum=$('#badgeSum');
+  const alertBox=$('#alertBox');
+  let onlyMissing=false;
 
-  // Rechnungen
-  const invAll = Object.values(data.rechnungen||{});
-  const invs = invAll.filter(r=>{
-    const d=parseDateAny(r.datum);
-    return (!q || [r.nr,r.datum,(r.items||[]).map(x=>x.title).join(' ')].some(x=>norm(String(x)).includes(q)))
-      && (!f && !t ? true : (d && (!f || d>=new Date(f+'T00:00:00')) && (!t || d<=new Date(t+'T23:59:59'))));
-  });
+  function computeStats(data){
+    const list=data.pakete||[]; 
+    const abw=list.filter(p=>(p.differenzen||[]).some(d=>d.missing?.length||d.extra?.length||d.mismatch?.length)).length;
+    const sum=list.reduce((a,p)=>a+(typeof p.summe==='number'?p.summe:0),0);
+    return {pakete:list.length, abw, sum};
+  }
+  function filesHtml(files){
+    files=files||[];
+    if(!files.length) return '<span class="muted">keine PDF</span>';
+    return files.map((f,i)=>`<a href="${f.url}" target="_blank" rel="noopener">PDF ${i+1}</a>`).join(' • ');
+  }
+  function pkgRowHtml(p,k){
+    const hasIssues = (p.differenzen||[]).some(x=>x.missing?.length||x.extra?.length||x.mismatch?.length);
+    const re=(p.rechnungen||[]).map(r=>`<a href="#" data-open-rg="${r}" class="chip" style="${chipStyleFor(r)}" title="Rechnung öffnen">${r}</a>`).join('');
+    const diffs = (p.differenzen||[]).map(d=>{
+      const miss = (d.missing||[]).map(m=>{ const [code,title]=String(m.key).split('|'); return `<li>❌ fehlt: <b>${code||''}</b> – ${title||''} (Remi erwartet ${m.expected?.qty??'?'})</li>`; }).join('');
+      const extra = (d.extra||[]).map(e=>{ const [code,title]=String(e.key).split('|'); return `<li>➕ extra: <b>${code||''}</b> – ${title||''} (nur auf Rechnung: ${e.found?.qty??'?'})</li>`; }).join('');
+      const mm = (d.mismatch||[]).map(x=>{ const [code,title]=String(x.key).split('|'); return `<li>⚖️ Menge abw.: <b>${code||''}</b> – ${title||''} (Remi ${x.remiQty??'?'}, Rechn. ${x.invQty??'?'})</li>`; }).join('');
+      const ok = (!miss && !extra && !mm) ? '<div class="muted">✓ Abgleich ok</div>' : '';
+      return `<div class="card" style="margin:.35rem 0;padding:.45rem .6rem;border-left:4px solid ${colorFor(d.rg)}">
+        <div class="muted" style="margin-bottom:.2rem">Abgleich zu RG <b style="color:${colorFor(d.rg)}">${d.rg}</b></div>
+        ${ok || `<ul style="margin:.2rem 0 .2rem 1rem">${miss}${extra}${mm}</ul>`}
+      </div>`;
+    }).join('') || '<div class="muted">Keine Abgleiche</div>';
 
-  // Render Listen
-  $('#overviewPackages').innerHTML = pkgs.length ? pkgs.map(p=>pkgRowHtml(p,p._k)).join('') : '<div class="muted">Keine Pakete…</div>';
-  $('#overviewInvoices').innerHTML = invs.length ? invs.map(invRowHtml).join('') : '<div class="muted">Keine Rechnungen…</div>';
+    const firstPdf = (p.files&&p.files[0]) ? p.files[0].url : null;
+    const statusLabel = p.status === 'ok' ? 'ok' : (p.status || '');
 
-  // Summen & Alarm
-  const s=computeStats({pakete:pkgs}); 
-  if(pkgs.length){ totals.hidden=false; badgeCount.textContent=`${s.pakete} Pakete`; badgeMissing.textContent=`${s.abw} abweichend`; badgeSum.textContent=`Summe: ${fmtEuro(s.sum)}`; } 
-  else { totals.hidden=true; }
-  renderAlertBox(data);
+    return `<details class="card" ${hasIssues?'open':''}>
+      <summary class="row">
+        <div><a href="${firstPdf||'#'}" ${firstPdf?'target="_blank" rel="noopener"':''} class="pkg-link" data-paket="${p.nr}"><b>Paket ${p.nr||''}</b></a></div>
+        <div class="muted">${p.datum||''}</div>
+        <div>${re||'<span class="muted">–</span>'}</div>
+        <div class="muted" style="color:${p.status==='abweichung'?'#c00':'inherit'}">${statusLabel}</div>
+      </summary>
+      <div style="margin:.4rem 0 .2rem"><b>PDFs:</b> ${filesHtml(p.files)}</div>
+      ${ p.status==='offen'
+          ? '<div class="muted" style="margin-top:.4rem">Noch keine Rechnung verknüpft – Abgleich nicht möglich.</div>'
+          : diffs
+        }
+    </details>`;
+  }
+  function invRowHtml(r){
+    const firstPdf = (r.files&&r.files[0]) ? r.files[0].url : null;
+    const items = (r.items||[]).slice(0,12).map(it=>`<li><b>${it.code||''}</b> – ${it.title||''} • Menge: ${it.qty??''}</li>`).join('');
+    const noPdfHint = (!r.files || !r.files.length) ? '<div class="muted">Keine PDF verknüpft</div>' : '';
+    return `<details class="card">
+      <summary class="row">
+        <div><a href="${firstPdf||'#'}" ${firstPdf?'target="_blank" rel="noopener"':''} class="rg-link" data-rg="${r.nr}"><b>RG ${r.nr}</b></a></div>
+        <div class="muted">${r.datum||''}</div>
+        <div>${filesHtml(r.files)}</div>
+        <div class="muted">Positionen: ${(r.items||[]).length}</div>
+      </summary>
+      ${noPdfHint}
+      <div style="margin:.4rem 0 .2rem">
+        <button class="attachPdfBtn" data-rg="${r.nr}">PDF hinzufügen</button>
+        <input type="file" accept="application/pdf" class="attachPdfInput" data-rg="${r.nr}" style="display:none">
+      </div>
+      ${ items ? `<ul style="margin:.4rem 0 .2rem 1rem">${items}${(r.items||[]).length>12?'<li class="muted">…</li>':''}</ul>` : '<div class="muted">Keine Positionen erkannt</div>'}
+    </details>`;
+  }
+  function renderAlertBox(data){
+    const pkgs = (data.pakete||[]);
+    const bad = pkgs.filter(p => p.status==='abweichung');
+    if(bad.length){
+      alertBox.style.display='block';
+      const maxShow = 6;
+      const list = bad.slice(0,maxShow).map(p=>`<li>Paket <b>${p.nr}</b> (${p.datum||'–'}) – Rechnungen: ${(p.rechnungen||[]).join(', ')||'–'}</li>`).join('');
+      alertBox.innerHTML = `<b>⚠️ Abweichungen:</b> ${bad.length} Paket(e) betroffen.
+        <ul style="margin:.4rem 0 .2rem 1rem">${list}${bad.length>maxShow?'<li class="muted">…</li>':''}</ul>`;
+    }else{
+      alertBox.style.display='none';
+      alertBox.innerHTML='';
+    }
+  }
+  function render(data){
+    const gk=data.kundennummer||''; 
+    const q=norm($('#searchInput')?.value), ksel=$('#kdnrSelect')?.value, f=$('#dateFrom')?.value, t=$('#dateTo')?.value;
 
-  // Kdnr-Dropdown
-  const kset=new Set(); if(data.kundennummer) kset.add(String(data.kundennummer)); (data.pakete||[]).forEach(p=>{ if(p.kundennummer) kset.add(String(p.kundennummer)); });
-  const cur=kdnrSelect.value; kdnrSelect.innerHTML='<option value="">Alle Kunden</option>'+Array.from(kset).sort().map(k=>`<option>${k}</option>`).join('');
-  if(cur && Array.from(kset).includes(cur)) kdnrSelect.value=cur;
-
-  // Klick-Handler für RG-Chips (Rechnung öffnen)
-  document.querySelectorAll('[data-open-rg]').forEach(a=>{
-    a.addEventListener('click',e=>{
-      e.preventDefault();
-      const rg=a.getAttribute('data-open-rg');
-      const r=(data.rechnungen||{})[rg];
-      if(r?.files?.length){ window.open(r.files[0].url,'_blank','noopener'); }
-      else toast('Zu dieser Rechnung ist keine PDF verknüpft.');
+    const allPkgs=(data.pakete||[]).map(p=>({...p,_k:p.kundennummer||gk}));
+    const pkgs=allPkgs.filter(p=>{
+      const d=parseDateAny(p.datum);
+      const issues=(p.differenzen||[]).some(x=>x.missing?.length||x.extra?.length||x.mismatch?.length);
+      return (!ksel || p._k===ksel)
+        && (!q || [p.nr,p.datum,p.status,(p.rechnungen||[]).join(' '),p._k].some(x=>norm(x).includes(q)))
+        && (!onlyMissing || issues)
+        && (!f && !t ? true : (d && (!f || d>=new Date(f+'T00:00:00')) && (!t || d<=new Date(t+'T23:59:59'))));
     });
-  });
-}
 
-/* ===== 11) Datei-Import (JSON/EML/PDF, Drag&Drop) ===== */
-$('#importBtn').addEventListener('click',()=>$('#importFile').click());
-$('#importFile').addEventListener('change',async e=>{for(const f of Array.from(e.target.files||[])) await handleFile(f); e.target.value='';});
-const dropZone=document.getElementById('dropZone');
-['dragenter','dragover'].forEach(ev=>dropZone.addEventListener(ev,e=>{e.preventDefault(); dropZone.style.background='#eef3ff';}));
-['dragleave','drop'].forEach(ev=>dropZone.addEventListener(ev,e=>{e.preventDefault(); dropZone.style.background='#f8faff';}));
-dropZone.addEventListener('drop', async e=>{for(const f of Array.from(e.dataTransfer.files||[])) await handleFile(f);});
+    const invAll = Object.values(data.rechnungen||{});
+    const invs = invAll.filter(r=>{
+      const d=parseDateAny(r.datum);
+      return (!q || [r.nr,r.datum,(r.items||[]).map(x=>x.title).join(' ')].some(x=>norm(String(x)).includes(q)))
+        && (!f && !t ? true : (d && (!f || d>=new Date(f+'T00:00:00')) && (!t || d<=new Date(t+'T23:59:59'))));
+    });
 
-async function handleFile(file){
-  const name=(file.name||'').toLowerCase();
+    $('#overviewPackages').innerHTML = pkgs.length ? pkgs.map(p=>pkgRowHtml(p,p._k)).join('') : '<div class="muted">Keine Pakete…</div>';
+    $('#overviewInvoices').innerHTML = invs.length ? invs.map(invRowHtml).join('') : '<div class="muted">Keine Rechnungen…</div>';
 
-  if(name.endsWith('.json')){
-    const obj=JSON.parse(await file.text());
-    await writeStore(pruneOld(obj));
-    inputArea.value=JSON.stringify(await readStore(),null,2);
-    toast('JSON importiert ✅'); render(await readStore());
-    return;
+    const s=computeStats({pakete:pkgs}); 
+    const totals=$('#totals'); const badgeCount=$('#badgeCount'); const badgeMissing=$('#badgeMissing'); const badgeSum=$('#badgeSum');
+    if(pkgs.length){ totals.hidden=false; badgeCount.textContent=`${s.pakete} Pakete`; badgeMissing.textContent=`${s.abw} abweichend`; badgeSum.textContent=`Summe: ${fmtEuro(s.sum)}`; } 
+    else { totals.hidden=true; }
+
+    renderAlertBox(data);
+
+    const kset=new Set(); if(data.kundennummer) kset.add(String(data.kundennummer)); (data.pakete||[]).forEach(p=>{ if(p.kundennummer) kset.add(String(p.kundennummer)); });
+    const cur=kdnrSelect.value; kdnrSelect.innerHTML='<option value="">Alle Kunden</option>'+Array.from(kset).sort().map(k=>`<option>${k}</option>`).join('');
+    if(cur && Array.from(kset).includes(cur)) kdnrSelect.value=cur;
+
+    document.querySelectorAll('[data-open-rg]').forEach(a=>{
+      a.addEventListener('click',e=>{
+        e.preventDefault();
+        const rg=a.getAttribute('data-open-rg');
+        const r=(data.rechnungen||{})[rg];
+        if(r?.files?.length){ window.open(r.files[0].url,'_blank','noopener'); }
+        else toast('Zu dieser Rechnung ist keine PDF verknüpft.');
+      });
+    });
   }
 
-  if(name.endsWith('.eml')){
-    const raw=await file.text();
-    const subj=(raw.match(/^Subject:\s*(.+)$/mi)||[])[1]||'';
-    const body=raw.split(/\r?\n\r?\n/).slice(1).join('\n');
-    const parsed = scanTextForFields(subj+'\n'+body);
-    await mergeParsedIntoStore(parsed, null);
-    toast('EML importiert ✅'); return;
-  }
+  // ========= Datei-Import =========
+  document.getElementById('importBtn').addEventListener('click',()=>document.getElementById('importFile').click());
+  document.getElementById('importFile').addEventListener('change',async e=>{for(const f of Array.from(e.target.files||[])) await handleFile(f); e.target.value='';});
+  const dropZone=document.getElementById('dropZone');
+  ['dragenter','dragover'].forEach(ev=>dropZone.addEventListener(ev,e=>{e.preventDefault(); dropZone.style.background='#eef3ff';}));
+  ['dragleave','drop'].forEach(ev=>dropZone.addEventListener(ev,e=>{e.preventDefault(); dropZone.style.background='#f8faff';}));
+  dropZone.addEventListener('drop', async e=>{for(const f of Array.from(e.dataTransfer.files||[])) await handleFile(f);});
 
-  if(name.endsWith('.pdf')){
-    const url = URL.createObjectURL(file); // gilt bis Tab-Reload
-    const text=await pdfBlobToText(file);
-    let parsed = scanTextForFields(text);
+  async function handleFile(file){
+    const name=(file.name||'').toLowerCase();
 
-    // RG auch aus Dateiname ziehen
-    const rgFromName = extractInvoiceNumbersFromFileName(file.name);
-    const allRg = new Set([...(parsed.rechnungen || []), ...rgFromName]);
+    if(name.endsWith('.json')){
+      const obj=JSON.parse(await file.text());
+      await writeStore(pruneOld(obj));
+      inputArea.value=JSON.stringify(await readStore(),null,2);
+      toast('JSON importiert ✅'); render(await readStore());
+      return;
+    }
 
-    // Store für Fallbacks
-    let store = await readStore(); store = await ensureShape(store);
+    if(name.endsWith('.eml')){
+      const raw=await file.text();
+      const subj=(raw.match(/^Subject:\s*(.+)$/mi)||[])[1]||'';
+      const body=raw.split(/\r?\n\r?\n/).slice(1).join('\n');
+      const parsed = scanTextForFields(subj+'\n'+body);
+      await mergeParsedIntoStore(parsed, null);
+      toast('EML importiert ✅'); return;
+    }
 
-    // Fallback 1: Paket erkannt → vorhandene RGs des Pakets übernehmen
-    if (allRg.size === 0 && parsed.paket) {
-      const pkg = (store.pakete || []).find(p => p.nr === parsed.paket);
-      if (pkg && Array.isArray(pkg.rechnungen) && pkg.rechnungen.length) {
-        pkg.rechnungen.forEach(rg => allRg.add(rg));
+    if(name.endsWith('.pdf')){
+      const url = URL.createObjectURL(file); // gilt bis Tab-Reload
+      const text=await pdfBlobToText(file);
+      let parsed = scanTextForFields(text);
+
+      const rgFromName = extractInvoiceNumbersFromFileName(file.name);
+      const allRg = new Set([...(parsed.rechnungen || []), ...rgFromName]);
+
+      let store = await readStore(); store = await ensureShape(store);
+
+      if (allRg.size === 0 && parsed.paket) {
+        const pkg = (store.pakete || []).find(p => p.nr === parsed.paket);
+        if (pkg && Array.isArray(pkg.rechnungen) && pkg.rechnungen.length) {
+          pkg.rechnungen.forEach(rg => allRg.add(rg));
+        }
       }
-    }
-    // Fallback 2: exakt 1 Rechnung im System
-    if (allRg.size === 0) {
-      const rgKeys = Object.keys(store.rechnungen || {});
-      if (rgKeys.length === 1) allRg.add(rgKeys[0]);
-    }
-    // Fallback 3: Kandidaten aus Dateiname, die existieren
-    if (allRg.size === 0 && rgFromName.length) {
-      for (const candidate of rgFromName) {
-        if (store.rechnungen && store.rechnungen[candidate]) allRg.add(candidate);
+      if (allRg.size === 0) {
+        const rgKeys = Object.keys(store.rechnungen || {});
+        if (rgKeys.length === 1) allRg.add(rgKeys[0]);
       }
-    }
+      if (allRg.size === 0 && rgFromName.length) {
+        for (const candidate of rgFromName) {
+          if (store.rechnungen && store.rechnungen[candidate]) allRg.add(candidate);
+        }
+      }
 
-    const fileRef = {name:file.name, url, type:'pdf', source:'upload'};
+      const fileRef = {name:file.name, url, type:'pdf', source:'upload'};
 
-    // an Rechnung(en) hängen
-    if (allRg.size > 0) {
-      for (const rg of allRg) {
+      if (allRg.size > 0) {
+        for (const rg of allRg) {
+          let d=await readStore(); d=await ensureShape(d);
+          addFileRefToInvoice(d, rg, fileRef);
+          await writeStore(d);
+        }
+        parsed.rechnungen = Array.from(allRg);
+        parsed.type = 'invoice';
+      }
+      if(parsed.paket){
         let d=await readStore(); d=await ensureShape(d);
-        addFileRefToInvoice(d, rg, fileRef);
+        addFileRefToPackage(d, parsed.paket, fileRef);
         await writeStore(d);
       }
-      parsed.rechnungen = Array.from(allRg);
-      parsed.type = 'invoice';
+
+      await mergeParsedIntoStore(parsed, fileRef);
+      toast('PDF importiert ✅'); return;
     }
-    // zusätzlich an Paket hängen (falls erkannt)
-    if(parsed.paket){
-      let d=await readStore(); d=await ensureShape(d);
-      addFileRefToPackage(d, parsed.paket, fileRef);
-      await writeStore(d);
+
+    toast('Dateityp nicht unterstützt');
+  }
+
+  // ========= Export =========
+  function exportJSONdata(data){ const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remi-export.json'; a.click(); }
+  function exportCSV(data){
+    const rows=[['Kdnr','Paket','Datum','Status','Rechnungen','Summe']];
+    (data.pakete||[]).forEach(p=>rows.push([p.kundennummer||data.kundennummer||'',p.nr||'',p.datum||'',p.status||'',(p.rechnungen||[]).join(' '),typeof p.summe==='number'?p.summe:'']));
+    const csv=rows.map(r=>r.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(';')).join('\n');
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remi-export.csv'; a.click();
+  }
+  async function exportPDFdoc(data){ const {jsPDF}=window.jspdf; const doc=new jsPDF(); doc.text('Presse Remi – Export',14,14); const rows=(data.pakete||[]).map(p=>[p.kundennummer||data.kundennummer||'',p.nr||'',p.datum||'',p.status||'',(p.rechnungen||[]).join(' '),typeof p.summe==='number'?fmtEuro(p.summe):'']); doc.autoTable({head:[['Kdnr','Paket','Datum','Status','Rechnungen','Summe']],body:rows,startY:18,styles:{fontSize:9}}); doc.save('remi-export.pdf');}
+  function exportDiffCSV(data){
+    const rows = [['Kdnr','Paket','Rechnung','Typ','Code','Titel','Remi-Menge','Rechn.-Menge']];
+    const kdnr = data.kundennummer||'';
+    for(const p of (data.pakete||[])){
+      const baseK = p.kundennummer || kdnr || '';
+      for(const d of (p.differenzen||[])){
+        for(const m of (d.missing||[])){ const [code,title]=String(m.key).split('|'); rows.push([baseK,p.nr||'',d.rg||'','fehlt',code||'',title||'',m.expected?.qty??'', '0']); }
+        for(const e of (d.extra||[]))  { const [code,title]=String(e.key).split('|'); rows.push([baseK,p.nr||'',d.rg||'','extra', code||'',title||'','0', e.found?.qty??'']); }
+        for(const mm of (d.mismatch||[])){ const [code,title]=String(mm.key).split('|'); rows.push([baseK,p.nr||'',d.rg||'','menge', code||'',title||'',mm.remiQty??'',mm.invQty??'']); }
+      }
     }
+    const csv=rows.map(r=>r.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(';')).join('\n');
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remi-differenzen.csv'; a.click();
+  }
+
+  // ========= Buttons & Filter =========
+  document.getElementById('forceUpdate').addEventListener('click', async ()=>{
+    try{
+      if('serviceWorker' in navigator){const r=await navigator.serviceWorker.getRegistrations();for(const x of r) await x.unregister();}
+      if('caches' in window){const k=await caches.keys();await Promise.all(k.map(c=>caches.delete(c)));}
+    }catch(e){}
+    toast('Update erzwungen – neu laden…'); setTimeout(()=>location.reload(true),600);
+  });
+  document.getElementById('toggleMissing').addEventListener('click', async ()=>{ onlyMissing=!onlyMissing; toast(onlyMissing?'Nur abweichende…':'Alle anzeigen'); render(await readStore()); });
+  document.getElementById('clearSearch').addEventListener('click', async ()=>{ document.getElementById('searchInput').value=''; document.getElementById('dateFrom').value=''; document.getElementById('dateTo').value=''; toast('Filter zurückgesetzt'); render(await readStore()); });
+  document.getElementById('saveBtn').addEventListener('click', async ()=>{ try{let obj=JSON.parse(document.getElementById('inputArea').value||'{}'); obj=pruneOld(await ensureShape(obj||{kundennummer:'',pakete:[],rechnungen:{}})); await writeStore(obj); toast('Gespeichert ✅'); render(obj);}catch(e){toast('JSON-Fehler: '+e.message);} });
+  document.getElementById('loadBtn').addEventListener('click', async ()=>{ let d=await readStore(); d=pruneOld(d); await writeStore(d); document.getElementById('inputArea').value=JSON.stringify(d,null,2); toast('Geladen ✅'); render(d); });
+  document.getElementById('clearBtn').addEventListener('click', async ()=>{ await del(KEY); document.getElementById('inputArea').value=''; toast('Gelöscht ✅'); render({kundennummer:'',pakete:[],rechnungen:{}}); });
+  document.getElementById('exportJson').addEventListener('click', async ()=>exportJSONdata(await readStore()));
+  document.getElementById('exportCsv').addEventListener('click', async ()=>exportCSV(await readStore()));
+  document.getElementById('exportPdf').addEventListener('click', async ()=>exportPDFdoc(await readStore()));
+  document.getElementById('exportDiffCsv').addEventListener('click', async ()=>exportDiffCSV(await readStore()));
+  document.getElementById('settingsSave').addEventListener('click', async ()=>{ const s={allowed1:document.getElementById('allowed1').value.trim(),allowed2:document.getElementById('allowed2').value.trim(),allowed3:document.getElementById('allowed3').value.trim(),keywords:document.getElementById('keywords').value.trim()||'Remission,Rechnung'}; await set(SETTINGS_KEY,s); toast('Einstellungen gespeichert ✅'); });
+
+  // ========= Gmail =========
+  document.getElementById('gmailConnect').addEventListener('click',()=>{
+    if(!window.google?.accounts?.oauth2){ toast("Google API nicht geladen – neu laden"); return; }
+    gisClient=google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope:'https://www.googleapis.com/auth/gmail.readonly',
+      prompt:'consent',
+      include_granted_scopes:true,
+      callback:(resp)=>{ if(resp?.access_token){ accessToken=resp.access_token; document.getElementById('gmailFetch').disabled=false; toast('Gmail verbunden ✅'); } else toast('Login abgebrochen'); }
+    });
+    gisClient.requestAccessToken();
+  });
+
+  document.getElementById('gmailFetch').addEventListener('click', async ()=>{
+    try{
+      if(!accessToken){ toast("Bitte zuerst „Gmail verbinden“"); return; }
+      const s=await readSettings();
+      const sender = ['from:qtrado','from:@qtrado.de', s.allowed1, s.allowed2, s.allowed3].filter(Boolean).join(' OR ');
+      const words  = (s.keywords||'Remission,Rechnung').split(',').map(w=>w.trim()).filter(Boolean).map(w=>`"${w}"`).join(' OR ');
+      const baseQ  = [`(${sender})`, words?`(${words})`:'', 'newer_than:365d'].filter(Boolean).join(' ');
+      toast('Suche: '+baseQ);
+
+      let imported=0, nextPageToken=null, rounds=0;
+      const flatten = p => (p||[]).flatMap(x=> x?.parts ? flatten(x.parts) : [x]);
+
+      do{
+        rounds++;
+        const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(baseQ)}&maxResults=200${nextPageToken?`&pageToken=${nextPageToken}`:''}`;
+        const listResp = await fetch(url,{headers:{Authorization:`Bearer ${accessToken}`}});
+        const list = await listResp.json();
+        nextPageToken=list.nextPageToken||null;
+        if(!listResp.ok){ toast(`Gmail-Fehler: ${listResp.status}`); break; }
+        if(!list.messages?.length) break;
+
+        for(const m of list.messages){
+          const msg = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=full`,{headers:{Authorization:`Bearer ${accessToken}`}}).then(r=>r.json());
+          const headers=msg.payload?.headers||[];
+          const from=(headers.find(h=>h.name==='From')?.value||'').toLowerCase();
+          if(!(from.includes('qtrado')||from.includes('@qtrado.de'))) continue;
+
+          const subject=headers.find(h=>h.name==='Subject')?.value||'';
+          let bodyText=''; const parts=msg.payload?.parts||[]; const plain=parts.find(p=>p.mimeType==='text/plain')||msg.payload;
+          if(plain?.body?.data) bodyText=decodeB64Url(plain.body.data);
+
+          const baseParsed = scanTextForFields(subject+'\n'+bodyText);
+          let ok = await mergeParsedIntoStore(baseParsed, null);
+
+          const pdfParts = flatten(parts).filter(p=>p?.mimeType==='application/pdf');
+          for(const p of pdfParts){
+            const attId=p.body?.attachmentId; if(!attId) continue;
+            const att=await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}/attachments/${attId}`,{headers:{Authorization:`Bearer ${accessToken}`}}).then(r=>r.json());
+            if(!att.data) continue;
+            const bin = Uint8Array.from(decodeB64Url(att.data), c=>c.charCodeAt(0));
+            const blob = new Blob([bin],{type:'application/pdf'});
+            const url = URL.createObjectURL(blob);
+            const text = await pdfBlobToText(blob);
+            const parsed = scanTextForFields(text);
+
+            const fileRef = {name:(p.filename||'Anhang.pdf'), url, type:'pdf', source:'gmail'};
+            if(parsed.rechnungen?.length){ for(const rg of parsed.rechnungen){ let d=await readStore(); d=await ensureShape(d); addFileRefToInvoice(d, rg, fileRef); await writeStore(d); } }
+            if(parsed.paket){ let d=await readStore(); d=await ensureShape(d); addFileRefToPackage(d, parsed.paket, fileRef); await writeStore(d); }
+
+            const ok2 = await mergeParsedIntoStore(parsed, fileRef);
+            ok = ok || ok2;
+          }
+          if(ok) imported++;
+        }
+        if(rounds>=6) nextPageToken=null;
+      }while(nextPageToken);
+
+      toast(`Qtrado-E-Mails verarbeitet: ${imported}`);
+    }catch(e){ console.error(e); toast('Gmail-Fehler: '+(e.message||e)); }
+  });
+
+  // ========= „PDF hinzufügen“ (Rechnung) =========
+  document.addEventListener('click', async (e)=>{
+    const btn = e.target.closest('.attachPdfBtn');
+    if (!btn) return;
+    const rg = btn.getAttribute('data-rg');
+    const input = document.querySelector(`.attachPdfInput[data-rg="${rg}"]`);
+    if (input) input.click();
+  });
+  document.addEventListener('change', async (e)=>{
+    const inp = e.target.closest('.attachPdfInput');
+    if (!inp || !inp.files || !inp.files[0]) return;
+    const rg = inp.getAttribute('data-rg');
+    const file = inp.files[0];
+
+    const url = URL.createObjectURL(file);
+    const text = await pdfBlobToText(file);
+    const parsed = scanTextForFields(text);
+    parsed.rechnungen = Array.from(new Set([...(parsed.rechnungen||[]), rg]));
+
+    const fileRef = { name: file.name, url, type: 'pdf', source: 'manual' };
+    let d = await readStore(); d = await ensureShape(d);
+    addFileRefToInvoice(d, rg, fileRef);
+    await writeStore(d);
 
     await mergeParsedIntoStore(parsed, fileRef);
-    toast('PDF importiert ✅'); return;
-  }
-
-  toast('Dateityp nicht unterstützt');
-}
-
-/* ===== 12) Export (JSON/CSV/PDF/Diff-CSV) ===== */
-function exportJSONdata(data){ const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remi-export.json'; a.click(); }
-function exportCSV(data){
-  const rows=[['Kdnr','Paket','Datum','Status','Rechnungen','Summe']];
-  (data.pakete||[]).forEach(p=>rows.push([p.kundennummer||data.kundennummer||'',p.nr||'',p.datum||'',p.status||'',(p.rechnungen||[]).join(' '),typeof p.summe==='number'?p.summe:'']));
-  const csv=rows.map(r=>r.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(';')).join('\n');
-  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remi-export.csv'; a.click();
-}
-async function exportPDFdoc(data){ const {jsPDF}=window.jspdf; const doc=new jsPDF(); doc.text('Presse Remi – Export',14,14); const rows=(data.pakete||[]).map(p=>[p.kundennummer||data.kundennummer||'',p.nr||'',p.datum||'',p.status||'',(p.rechnungen||[]).join(' '),typeof p.summe==='number'?fmtEuro(p.summe):'']); doc.autoTable({head:[['Kdnr','Paket','Datum','Status','Rechnungen','Summe']],body:rows,startY:18,styles:{fontSize:9}}); doc.save('remi-export.pdf');}
-function exportDiffCSV(data){
-  const rows = [['Kdnr','Paket','Rechnung','Typ','Code','Titel','Remi-Menge','Rechn.-Menge']];
-  const kdnr = data.kundennummer||'';
-  for(const p of (data.pakete||[])){
-    const baseK = p.kundennummer || kdnr || '';
-    for(const d of (p.differenzen||[])){
-      for(const m of (d.missing||[])){ const [code,title]=String(m.key).split('|'); rows.push([baseK,p.nr||'',d.rg||'','fehlt',code||'',title||'',m.expected?.qty??'', '0']); }
-      for(const e of (d.extra||[]))  { const [code,title]=String(e.key).split('|'); rows.push([baseK,p.nr||'',d.rg||'','extra', code||'',title||'','0', e.found?.qty??'']); }
-      for(const mm of (d.mismatch||[])){ const [code,title]=String(mm.key).split('|'); rows.push([baseK,p.nr||'',d.rg||'','menge', code||'',title||'',mm.remiQty??'',mm.invQty??'']); }
-    }
-  }
-  const csv=rows.map(r=>r.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(';')).join('\n');
-  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remi-differenzen.csv'; a.click();
-}
-
-/* ===== 13) Buttons & Filter ===== */
-document.getElementById('forceUpdate').addEventListener('click', async ()=>{try{if('serviceWorker' in navigator){const r=await navigator.serviceWorker.getRegistrations();for(const x of r) await x.unregister();} if('caches' in window){const k=await caches.keys();await Promise.all(k.map(c=>caches.delete(c)));}}catch(e){} toast('Update erzwungen – neu laden…'); setTimeout(()=>location.reload(true),600);});
-document.getElementById('toggleMissing').addEventListener('click', async ()=>{ onlyMissing=!onlyMissing; toast(onlyMissing?'Nur abweichende…':'Alle anzeigen'); render(await readStore()); });
-document.getElementById('clearSearch').addEventListener('click', async ()=>{ searchInput.value=''; dateFrom.value=''; dateTo.value=''; toast('Filter zurückgesetzt'); render(await readStore()); });
-document.getElementById('saveBtn').addEventListener('click', async ()=>{ try{let obj=JSON.parse(inputArea.value||'{}'); obj=pruneOld(await ensureShape(obj||{kundennummer:'',pakete:[],rechnungen:{}})); await writeStore(obj); toast('Gespeichert ✅'); render(obj);}catch(e){toast('JSON-Fehler: '+e.message);} });
-document.getElementById('loadBtn').addEventListener('click', async ()=>{ let d=await readStore(); d=pruneOld(d); await writeStore(d); inputArea.value=JSON.stringify(d,null,2); toast('Geladen ✅'); render(d); });
-document.getElementById('clearBtn').addEventListener('click', async ()=>{ await del(KEY); inputArea.value=''; toast('Gelöscht ✅'); render({kundennummer:'',pakete:[],rechnungen:{}}); });
-document.getElementById('exportJson').addEventListener('click', async ()=>exportJSONdata(await readStore()));
-document.getElementById('exportCsv').addEventListener('click', async ()=>exportCSV(await readStore()));
-document.getElementById('exportPdf').addEventListener('click', async ()=>exportPDFdoc(await readStore()));
-document.getElementById('exportDiffCsv').addEventListener('click', async ()=>exportDiffCSV(await readStore()));
-document.getElementById('settingsSave').addEventListener('click', async ()=>{ const s={allowed1:document.getElementById('allowed1').value.trim(),allowed2:document.getElementById('allowed2').value.trim(),allowed3:document.getElementById('allowed3').value.trim(),keywords:document.getElementById('keywords').value.trim()||'Remission,Rechnung'}; await set(SETTINGS_KEY,s); toast('Einstellungen gespeichert ✅'); });
-
-/* ===== 14) Gmail: Verbinden & Abrufen (nur Qtrado) ===== */
-document.getElementById('gmailConnect').addEventListener('click',()=>{
-  if(!window.google?.accounts?.oauth2){ toast("Google API nicht geladen – neu laden"); return; }
-  gisClient=google.accounts.oauth2.initTokenClient({
-    client_id: GOOGLE_CLIENT_ID,
-    scope:'https://www.googleapis.com/auth/gmail.readonly',
-    prompt:'consent',
-    include_granted_scopes:true,
-    callback:(resp)=>{ if(resp?.access_token){ accessToken=resp.access_token; document.getElementById('gmailFetch').disabled=false; toast('Gmail verbunden ✅'); } else toast('Login abgebrochen'); }
+    toast(`PDF zu RG ${rg} verknüpft ✅`);
   });
-  gisClient.requestAccessToken();
-});
 
-document.getElementById('gmailFetch').addEventListener('click', async ()=>{
-  try{
-    if(!accessToken){ toast("Bitte zuerst „Gmail verbinden“"); return; }
-    const s=await readSettings();
-    const sender = ['from:qtrado','from:@qtrado.de', s.allowed1, s.allowed2, s.allowed3].filter(Boolean).join(' OR ');
-    const words  = (s.keywords||'Remission,Rechnung').split(',').map(w=>w.trim()).filter(Boolean).map(w=>`"${w}"`).join(' OR ');
-    const baseQ  = [`(${sender})`, words?`(${words})`:'', 'newer_than:365d'].filter(Boolean).join(' ');
-    toast('Suche: '+baseQ);
+  // ========= Init =========
+  (async ()=>{
+    setTab('main');
+    await set(SETTINGS_KEY, await readSettings());
+    let d=await readStore(); d=pruneOld(d||{kundennummer:'',pakete:[],rechnungen:{}}); await writeStore(d);
+    if($('#inputArea')) $('#inputArea').value=JSON.stringify(d,null,2);
+    render(d);
+    toast('App geladen ✅');
+  })();
 
-    let imported=0, nextPageToken=null, rounds=0;
-    const flatten = p => (p||[]).flatMap(x=> x?.parts ? flatten(x.parts) : [x]);
-
-    do{
-      rounds++;
-      const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(baseQ)}&maxResults=200${nextPageToken?`&pageToken=${nextPageToken}`:''}`;
-      const listResp = await fetch(url,{headers:{Authorization:`Bearer ${accessToken}`}});
-      const list = await listResp.json();
-      nextPageToken=list.nextPageToken||null;
-      if(!listResp.ok){ toast(`Gmail-Fehler: ${listResp.status}`); break; }
-      if(!list.messages?.length) break;
-
-      for(const m of list.messages){
-        const msg = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=full`,{headers:{Authorization:`Bearer ${accessToken}`}}).then(r=>r.json());
-        const headers=msg.payload?.headers||[];
-        const from=(headers.find(h=>h.name==='From')?.value||'').toLowerCase();
-        if(!(from.includes('qtrado')||from.includes('@qtrado.de'))) continue;
-
-        const subject=headers.find(h=>h.name==='Subject')?.value||'';
-        let bodyText=''; const parts=msg.payload?.parts||[]; const plain=parts.find(p=>p.mimeType==='text/plain')||msg.payload;
-        if(plain?.body?.data) bodyText=decodeB64Url(plain.body.data);
-
-        const baseParsed = scanTextForFields(subject+'\n'+bodyText);
-        let ok = await mergeParsedIntoStore(baseParsed, null);
-
-        // PDFs holen + verknüpfen
-        const pdfParts = flatten(parts).filter(p=>p?.mimeType==='application/pdf');
-        for(const p of pdfParts){
-          const attId=p.body?.attachmentId; if(!attId) continue;
-          const att=await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}/attachments/${attId}`,{headers:{Authorization:`Bearer ${accessToken}`}}).then(r=>r.json());
-          if(!att.data) continue;
-          const bin = Uint8Array.from(decodeB64Url(att.data), c=>c.charCodeAt(0));
-          const blob = new Blob([bin],{type:'application/pdf'});
-          const url = URL.createObjectURL(blob); // gilt bis Tab-Reload
-          const text = await pdfBlobToText(blob);
-          const parsed = scanTextForFields(text);
-
-          const fileRef = {name:(p.filename||'Anhang.pdf'), url, type:'pdf', source:'gmail'};
-          if(parsed.rechnungen?.length){ for(const rg of parsed.rechnungen){ let d=await readStore(); d=await ensureShape(d); addFileRefToInvoice(d, rg, fileRef); await writeStore(d); } }
-          if(parsed.paket){ let d=await readStore(); d=await ensureShape(d); addFileRefToPackage(d, parsed.paket, fileRef); await writeStore(d); }
-
-          const ok2 = await mergeParsedIntoStore(parsed, fileRef);
-          ok = ok || ok2;
-        }
-        if(ok) imported++;
-      }
-      if(rounds>=6) nextPageToken=null; // ~1200 Mails Safety
-    }while(nextPageToken);
-
-    toast(`Qtrado-E-Mails verarbeitet: ${imported}`);
-  }catch(e){ console.error(e); toast('Gmail-Fehler: '+(e.message||e)); }
-});
-
-/* ===== 15) Delegation: „PDF hinzufügen“ an Rechnung ===== */
-document.addEventListener('click', async (e)=>{
-  const btn = e.target.closest('.attachPdfBtn');
-  if (!btn) return;
-  const rg = btn.getAttribute('data-rg');
-  const input = document.querySelector(`.attachPdfInput[data-rg="${rg}"]`);
-  if (input) input.click();
-});
-document.addEventListener('change', async (e)=>{
-  const inp = e.target.closest('.attachPdfInput');
-  if (!inp || !inp.files || !inp.files[0]) return;
-  const rg = inp.getAttribute('data-rg');
-  const file = inp.files[0];
-
-  const url = URL.createObjectURL(file);
-  const text = await pdfBlobToText(file);
-  const parsed = scanTextForFields(text);
-  parsed.rechnungen = Array.from(new Set([...(parsed.rechnungen||[]), rg]));
-
-  const fileRef = { name: file.name, url, type: 'pdf', source: 'manual' };
-  let d = await readStore(); d = await ensureShape(d);
-  addFileRefToInvoice(d, rg, fileRef);
-  await writeStore(d);
-
-  await mergeParsedIntoStore(parsed, fileRef);
-  toast(`PDF zu RG ${rg} verknüpft ✅`);
-});
-
-/* ===== 16) Init ===== */
-(async ()=>{
-  setTab('main');
-  await set(SETTINGS_KEY, await readSettings());
-  let d=await readStore(); d=pruneOld(d||{kundennummer:'',pakete:[],rechnungen:{}}); await writeStore(d);
-  if($('#inputArea')) $('#inputArea').value=JSON.stringify(d,null,2);
-  render(d);
-  toast('App geladen ✅');
-})();
-
-/* ===== 17) Admin Login ===== */
-const ADMIN_USER = "admin";
-const ADMIN_PASS = "remi2025";
-document.getElementById("adminLink").addEventListener("click", e=>{
-  e.preventDefault();
-  document.getElementById("adminModal").style.display="flex";
-});
-document.getElementById("adminCancel").addEventListener("click", ()=>{
-  document.getElementById("adminModal").style.display="none";
-});
-document.getElementById("adminSubmit").addEventListener("click", ()=>{
-  const u=document.getElementById("adminUser").value.trim();
-  const p=document.getElementById("adminPass").value.trim();
-  if(u===ADMIN_USER && p===ADMIN_PASS){
+  // ========= Admin Login =========
+  const ADMIN_USER = "admin";
+  const ADMIN_PASS = "remi2025";
+  document.getElementById("adminLink").addEventListener("click", e=>{
+    e.preventDefault();
+    document.getElementById("adminModal").style.display="flex";
+  });
+  document.getElementById("adminCancel").addEventListener("click", ()=>{
     document.getElementById("adminModal").style.display="none";
-    document.getElementById("adminDashboard").style.display="block";
-    toast("Admin Login erfolgreich ✅");
-  }else{
-    alert("❌ Falsche Zugangsdaten!");
-  }
-});
-
-/* ===== 18) Hilfsfunktionen oben nutzen ===== */
-async function readStore(){return ensureShape(await get(KEY))}
-async function writeStore(o){await set(KEY, await ensureShape(o))}
+  });
+  document.getElementById("adminSubmit").addEventListener("click", ()=>{
+    const u=document.getElementById("adminUser").value.trim();
+    const p=document.getElementById("adminPass").value.trim();
+    if(u===ADMIN_USER && p===ADMIN_PASS){
+      document.getElementById("adminModal").style.display="none";
+      document.getElementById("adminDashboard").style.display="block";
+      toast("Admin Login erfolgreich ✅");
+    }else{
+      alert("❌ Falsche Zugangsdaten!");
+    }
+  });
   </script>
 </body>
 </html>
