@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Made by Durdu 2025 -->
+<!-- Presse Remi – Abgleich | Version 26.0.0 | Made by Durdu 2025 -->
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Presse Remi – Abgleich</title>
+  <title>Presse Remi – Abgleich v26.0.0</title>
   <meta name="theme-color" content="#0a84ff">
 
   <style>
@@ -16,6 +16,7 @@
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:1rem auto;max-width:1200px;padding:0 1rem;background:#fff}
     header{display:flex;gap:12px;align-items:center}
     h1{font-size:1.45rem;margin:.5rem 0}
+    .version{font-size:.8em;color:#666;margin-left:.5rem}
     h2{margin:.7rem 0 .35rem}
     h3{margin:.4rem 0}
     .muted{color:var(--muted);font-size:.95rem}
@@ -44,7 +45,6 @@
     a:hover{text-decoration:underline}
     .alert{display:none;margin:.6rem 0;padding:.6rem .8rem;border:1px solid #ffd6d6;background:#fff2f2;color:#a40000;border-radius:.6rem}
     .alert b{color:#a40000}
-    .kbd{font:.85rem ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#f5f5f7;border:1px solid #ddd;border-radius:.35rem;padding:.05rem .35rem}
   </style>
 
   <!-- IndexedDB helper -->
@@ -70,7 +70,10 @@
 
   <header>
     <div>
-      <h1>Presse Remi – Abgleich</h1>
+      <h1>
+        Presse Remi – Abgleich
+        <span class="version">v26.0.0</span>
+      </h1>
       <div class="muted">Lokale Speicherung. Offline nutzbar.</div>
       <div class="banner">ℹ️ Rechnungen & Remissionen werden nur <u>3 Monate</u> intern gespeichert. Ältere Einträge werden automatisch gelöscht.</div>
       <div id="alertBox" class="alert"></div>
@@ -161,7 +164,7 @@
 
   <!-- Footer mit Admin-Login -->
   <footer>
-    <div>Made by Durdu 2025</div>
+    <div>Made by Durdu 2025 – Version 26.0.0</div>
     <div><a href="#" id="adminLink">Admin Login</a></div>
   </footer>
 
@@ -186,6 +189,9 @@
   </section>
 
   <script>
+  /* ===== Version ===== */
+  const APP_VERSION = "26.0.0";
+
   /* ===== Fehler sichtbar machen ===== */
   window.addEventListener('error', (e)=> {
     const el = document.getElementById('toast');
@@ -208,7 +214,7 @@
     if('caches' in window){const k=await caches.keys();await Promise.all(k.map(c=>caches.delete(c)));}
   }catch(e){}})();
 
-  /* ===== Speicher (IndexedDB) ===== */
+  /* ===== Speicher (IndexedDB/LocalStorage Fallback) ===== */
   const __idb = window.idbKeyval || { get: async k=>JSON.parse(localStorage.getItem(k)||'null'), set: async (k,v)=>localStorage.setItem(k,JSON.stringify(v)), del: async k=>localStorage.removeItem(k) };
   const {get,set,del}=__idb;
   const KEY='presse-remi-daten-v13', SETTINGS_KEY='presse-remi-settings-v10';
@@ -386,17 +392,22 @@
         }
       }
       if(parsed.type==='invoice' && parsed.rechnungen?.length){
+        const before = new Set(p.rechnungen);
         for(const rg of parsed.rechnungen){ if(!p.rechnungen.includes(rg)) p.rechnungen.push(rg); }
+        // Wenn Paket schon PDFs hat und wir jetzt Rechnungen verknüpfen -> PDFs an RG spiegeln
+        if(p.files?.length){
+          for(const rg of parsed.rechnungen){
+            for(const f of p.files) addFileRefToInvoice(data, rg, f);
+          }
+        }
       }
 
-      // <<< WICHTIG: PDF am Paket -> an alle verknüpften Rechnungen spiegeln
+      // PDF an Paket – und an alle bereits verknüpften Rechnungen spiegeln
       if(fileRef && parsed.paket){
         addFileRefToPackage(data, parsed.paket, fileRef);
         const pkgNow = (data.pakete || []).find(x => x.nr === parsed.paket);
         if (pkgNow && Array.isArray(pkgNow.rechnungen)) {
-          for (const rg of pkgNow.rechnungen) {
-            addFileRefToInvoice(data, rg, fileRef);
-          }
+          for (const rg of pkgNow.rechnungen) addFileRefToInvoice(data, rg, fileRef);
         }
       }
     }
@@ -427,8 +438,7 @@
 
   /* ===== Render ===== */
   const inputArea=$('#inputArea'), kdnrSelect=$('#kdnrSelect'), searchInput=$('#searchInput');
-  const dateFrom=$('#dateFrom'), dateTo=$('#dateTo'), totals=$('#totals');
-  const badgeCount=$('#badgeCount'), badgeMissing=$('#badgeMissing'), badgeSum=$('#badgeSum');
+  const dateFrom=$('#dateFrom'), dateTo=$('#dateTo');
   const alertBox=$('#alertBox');
   let onlyMissing=false;
 
@@ -582,7 +592,7 @@
     }
 
     if(name.endsWith('.pdf')){
-      const url = URL.createObjectURL(file); // gilt bis Tab-Reload
+      const url = URL.createObjectURL(file); // Tab-lokal
       const text=await pdfBlobToText(file);
       let parsed = scanTextForFields(text);
 
@@ -594,9 +604,7 @@
       let store = await readStore(); store = await ensureShape(store);
       if (allRg.size === 0 && parsed.paket) {
         const pkg = (store.pakete || []).find(p => p.nr === parsed.paket);
-        if (pkg && Array.isArray(pkg.rechnungen) && pkg.rechnungen.length) {
-          pkg.rechnungen.forEach(rg => allRg.add(rg));
-        }
+        if (pkg?.rechnungen?.length) pkg.rechnungen.forEach(rg => allRg.add(rg));
       }
       if (allRg.size === 0) {
         const rgKeys = Object.keys(store.rechnungen || {});
@@ -626,7 +634,7 @@
         let d = await readStore(); d = await ensureShape(d);
         addFileRefToPackage(d, parsed.paket, fileRef);
         const pkg = (d.pakete || []).find(p => p.nr === parsed.paket);
-        if (pkg && Array.isArray(pkg.rechnungen)) {
+        if (pkg?.rechnungen?.length) {
           for (const rg of pkg.rechnungen) addFileRefToInvoice(d, rg, fileRef);
         }
         await writeStore(d);
@@ -784,15 +792,15 @@
     toast(`PDF zu RG ${rg} verknüpft ✅`);
   });
 
-  /* ===== WICHTIG: Links in <summary> zuverlässig öffnen ===== */
-  document.addEventListener('click', (e) => {
+  /* ===== Wichtig: Links in <summary> zuverlässig öffnen (auch iOS) ===== */
+  document.addEventListener('click', function (e) {
     const a = e.target.closest('a.rg-link, a.pkg-link');
     if (!a) return;
-    e.preventDefault();    // verhindert, dass <summary> nur toggelt
+    e.preventDefault();
     e.stopPropagation();
     const href = a.getAttribute('href');
     if (href && href !== '#') window.open(href, '_blank', 'noopener');
-  });
+  }, true); // Capture!
 
   /* ===== Init ===== */
   (async ()=>{
@@ -801,7 +809,7 @@
     let d=await readStore(); d=pruneOld(d||{kundennummer:'',pakete:[],rechnungen:{}}); await writeStore(d);
     if($('#inputArea')) $('#inputArea').value=JSON.stringify(d,null,2);
     render(d);
-    toast('App geladen ✅');
+    toast('App geladen ✅ v'+APP_VERSION);
   })();
 
   /* ===== Admin Login ===== */
