@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Presse Remi – Abgleich | Version 27.2.3 | Made by Durdu 2025 -->
+<!-- Presse Remi – Abgleich | Version 27.2.5 | Made by Durdu 2025 -->
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Presse Remi – Abgleich v27.2.3</title>
+  <title>Presse Remi – Abgleich v27.2.5</title>
   <meta name="theme-color" content="#0a84ff">
   <style>
     :root { --blue:#0a84ff; --muted:#666; }
@@ -62,7 +62,7 @@
 
   <header>
     <div>
-      <h1>Presse Remi – Abgleich <span class="version">v27.2.3</span></h1>
+      <h1>Presse Remi – Abgleich <span class="version">v27.2.5</span></h1>
       <div class="muted">Lokale Speicherung. Offline nutzbar.</div>
       <div class="banner">ℹ️ Rechnungen & Remissionen werden nur <u>3 Monate</u> intern gespeichert. Ältere Einträge werden automatisch gelöscht.</div>
       <div id="alertBox" class="alert"></div>
@@ -150,7 +150,7 @@
   </section>
 
   <footer>
-    <div>Made by Durdu 2025 – Version 27.2.3</div>
+    <div>Made by Durdu 2025 – Version 27.2.5</div>
     <div><a href="#" id="adminLink">Admin Login</a></div>
   </footer>
 
@@ -174,7 +174,7 @@
   </section>
 
   <script>
-  const APP_VERSION = "27.2.3";
+  const APP_VERSION = "27.2.5";
 
   /* ===== Basics ===== */
   window.addEventListener('error', (e)=> {
@@ -222,6 +222,15 @@
   const decodeB64Url = s => { try { return atob(String(s||'').replace(/-/g,'+').replace(/_/g,'/')); } catch { return ''; } };
   const blobToDataUrl = (blob)=>new Promise(res=>{const r=new FileReader(); r.onload=()=>res(r.result); r.readAsDataURL(blob);});
 
+  /* ===== RG-Normalisierung (v27.2.4) ===== */
+  function normalizeRg(raw){
+    if(!raw) return '';
+    let r = String(raw).replace(/\D+/g,'');        // nur Ziffern
+    r = r.replace(/^0+/, '');                      // führende Nullen weg
+    if (r.length > 12 && /\d{11}$/.test(r)) r = r.slice(-11); // lange Ketten -> letzte 11
+    return r;
+  }
+
   /* ===== RG-Erkennung ===== */
   function extractInvoiceNumbersFromText(txt){
     if(!txt) return [];
@@ -236,10 +245,10 @@
     for (const re of labeled) for (const m of txt.matchAll(re)) out.add(m[1]);
     for (const m of txt.matchAll(/\b(\d{9,18})\b/g)) {
       const num=m[1];
-      if (/^20\d{6,}$/.test(num)) continue; // Jahreszahlen etc. filtern
+      if (/^20\d{6,}$/.test(num)) continue; // Jahreszahlen etc.
       out.add(num);
     }
-    return Array.from(out);
+    return Array.from(out).map(normalizeRg).filter(Boolean);
   }
   function extractInvoiceNumbersFromFileName(name){
     if(!name) return [];
@@ -255,7 +264,7 @@
       const s = parts[i];
       if (/^\d{9,18}$/.test(s)) { out.add(s); break; }
     }
-    return Array.from(out);
+    return Array.from(out).map(normalizeRg).filter(Boolean);
   }
 
   /* ===== PDF lesen ===== */
@@ -306,6 +315,7 @@
     p.files ||= []; p.files.push(fileObj);
   }
   function addFileRefToInvoice(data, rgNr, fileObj){
+    rgNr = normalizeRg(rgNr);
     const r = (data.rechnungen[rgNr] ||= {nr:rgNr, datum:'', items:[], files:[]});
     r.files ||= []; r.files.push(fileObj);
   }
@@ -315,7 +325,8 @@
     let data = await readStore(); data = await ensureShape(data);
 
     if(parsed.type==='invoice' && parsed.rechnungen?.length){
-      for(const rg of parsed.rechnungen){
+      for(const _rg of parsed.rechnungen){
+        const rg = normalizeRg(_rg);
         const r=data.rechnungen[rg] || {nr:rg, datum:parsed.datum||'', items:[], files:[]};
         if(parsed.items?.length){
           const seen=new Set(r.items.map(x=>x.code+'|'+x.title));
@@ -344,24 +355,25 @@
         }
       }
       if(parsed.type==='invoice' && parsed.rechnungen?.length){
-        for(const rg of parsed.rechnungen){ if(!p.rechnungen.includes(rg)) p.rechnungen.push(rg); }
+        for(const _rg of parsed.rechnungen){ const rg=normalizeRg(_rg); if(!p.rechnungen.includes(rg)) p.rechnungen.push(rg); }
         if(p.files?.length){
-          for(const rg of parsed.rechnungen){ for(const f of p.files) addFileRefToInvoice(data, rg, f); }
+          for(const _rg of parsed.rechnungen){ const rg=normalizeRg(_rg); for(const f of p.files) addFileRefToInvoice(data, rg, f); }
         }
       }
       if(fileRef && parsed.paket){
         addFileRefToPackage(data, parsed.paket, fileRef);
         const pkgNow = (data.pakete || []).find(x => x.nr === parsed.paket);
-        if (pkgNow && Array.isArray(pkgNow.rechnungen)) for (const rg of pkgNow.rechnungen) addFileRefToInvoice(data, rg, fileRef);
+        if (pkgNow && Array.isArray(pkgNow.rechnungen)) for (const _rg of pkgNow.rechnungen){ const rg=normalizeRg(_rg); addFileRefToInvoice(data, rg, fileRef); }
       }
     }
 
     for (const p of data.pakete) {
       p.differenzen = [];
-      const linkedInvoices = (p.rechnungen || []).map(rg => data.rechnungen[rg]).filter(Boolean);
+      const linkedInvoices = (p.rechnungen || []).map(rg => data.rechnungen[normalizeRg(rg)]).filter(Boolean);
       if (!linkedInvoices.length) { p.status = 'offen'; continue; }
       let hasIssues = false;
-      for (const rg of (p.rechnungen || [])) {
+      for (const _rg of (p.rechnungen || [])) {
+        const rg = normalizeRg(_rg);
         const r = data.rechnungen[rg];
         if (!r) continue;
         const diffs = diffItems(p.positionen || [], r.items || []);
@@ -425,7 +437,8 @@
         }
         const hits = new Set([...fileNameHits, ...contentHits]);
         for (const rg of hits) {
-          if (!known.has(rg)) { p.rechnungen.push(rg); known.add(rg); changed = true; }
+          const nrg = normalizeRg(rg);
+          if (!known.has(nrg)) { p.rechnungen.push(nrg); known.add(nrg); changed = true; }
         }
       }
     }
@@ -442,13 +455,15 @@
     for (const x of allFiles) {
       const hits = new Set(extractInvoiceNumbersFromFileName(x.f.name || ''));
       for (const rg of hits) {
-        const arr = indexByName.get(rg) || [];
+        const key = normalizeRg(rg);
+        const arr = indexByName.get(key) || [];
         arr.push(x.f);
-        indexByName.set(rg, arr);
+        indexByName.set(key, arr);
       }
     }
-    for (const [rg, rec] of Object.entries(data.rechnungen || {})) {
+    for (const [rgKey, rec] of Object.entries(data.rechnungen || {})) {
       if (rec.files && rec.files.length) continue;
+      const rg = normalizeRg(rgKey);
       const byName = indexByName.get(rg) || [];
       if (byName.length) { rec.files = [...byName]; changed = true; continue; }
       for (const x of allFiles) {
@@ -464,7 +479,7 @@
           }
           if (!blob) continue;
           const hits = await extractRgFromPdfBlob(blob);
-          if (hits.includes(rg)) {
+          if (hits.map(normalizeRg).includes(rg)) {
             rec.files ||= [];
             if (!rec.files.some(ff => ff.url===x.f.url && ff.name===x.f.name)) {
               rec.files.push(x.f);
@@ -502,7 +517,7 @@
 
   function pkgRowHtml(p){
     const hasIssues = (p.differenzen||[]).some(x=>x.missing?.length||x.extra?.length||x.mismatch?.length);
-    const re=(p.rechnungen||[]).map(r=>`<a href="#" data-open-rg="${r}" class="chip" style="${chipStyleFor(r)}" title="Rechnung öffnen">${r}</a>`).join('');
+    const re=(p.rechnungen||[]).map(r=>`<a href="#" data-open-rg="${normalizeRg(r)}" class="chip" style="${chipStyleFor(r)}" title="Rechnung öffnen">${normalizeRg(r)}</a>`).join('');
     const diffs = (p.differenzen||[]).map(d=>{
       const miss = (d.missing||[]).map(m=>{ const [code,title]=String(m.key).split('|'); return `<li>❌ fehlt: <b>${code||''}</b> – ${title||''} (Remi ${m.expected?.qty??'?'})</li>`; }).join('');
       const extra = (d.extra||[]).map(e=>{ const [code,title]=String(e.key).split('|'); return `<li>➕ extra: <b>${code||''}</b> – ${title||''} (nur RG: ${e.found?.qty??'?'})</li>`; }).join('');
@@ -613,11 +628,11 @@
       a.addEventListener('click',async e=>{
         e.preventDefault();
         let d=await readStore();
-        const rg=a.getAttribute('data-open-rg');
+        const rg=normalizeRg(a.getAttribute('data-open-rg'));
         const r=(d.rechnungen||{})[rg];
-        if(r?.files?.length){ return openPdfNow(r.files[0]); }
+        if(r?.files?.length){ await openPdfViewer(r.files[0]); return; }
         const donor=(d.pakete||[]).find(p=>(p.rechnungen||[]).includes(rg) && p.files && p.files.length);
-        if(donor) return openPdfNow(donor.files[0]);
+        if(donor){ await openPdfViewer(donor.files[0]); return; }
         toast('Zu dieser Rechnung ist keine PDF verknüpft.');
       });
     });
@@ -626,9 +641,10 @@
   /* ===== Auto-Reparatur: Rechnung ohne PDF -> Paket-PDFs übernehmen ===== */
   async function repairInvoiceFilesFromPackages(data) {
     let changed = false;
-    for (const [rg, r] of Object.entries(data.rechnungen || {})) {
+    for (const [rgKey, r] of Object.entries(data.rechnungen || {})) {
       if (r.files && r.files.length) continue;
-      const donors = (data.pakete || []).filter(p => (p.rechnungen || []).includes(rg) && p.files && p.files.length);
+      const rg = normalizeRg(rgKey);
+      const donors = (data.pakete || []).filter(p => (p.rechnungen || []).map(normalizeRg).includes(rg) && p.files && p.files.length);
       if (!donors.length) continue;
       r.files ||= [];
       for (const p of donors) {
@@ -645,7 +661,7 @@
     return changed;
   }
 
-  /* ===== scanTextForFields (NEU – global, ohne extra <script>) ===== */
+  /* ===== scanTextForFields (global) ===== */
   (function (global) {
     if (typeof global.scanTextForFields === 'function') return;
 
@@ -685,7 +701,7 @@
         if (mD) out.datum = `${mD[3]}-${mD[2]}-${mD[1]}`;
       }
 
-      try { out.rechnungen = (extractInvoiceNumbersFromText(txt) || []); } catch { out.rechnungen = []; }
+      try { out.rechnungen = (extractInvoiceNumbersFromText(txt) || []).map(normalizeRg); } catch { out.rechnungen = []; }
       if (out.rechnungen.length) out.type = 'invoice';
 
       out.items = extractItemsFromText(txt);
@@ -698,7 +714,7 @@
   document.getElementById('importFile').addEventListener('change',async e=>{for(const f of Array.from(e.target.files||[])) await handleFile(f); e.target.value='';});
   const dropZone=document.getElementById('dropZone');
   ['dragenter','dragover'].forEach(ev=>dropZone.addEventListener(ev,e=>{e.preventDefault(); dropZone.style.background='#eef3ff';}));
-  ['dragleave','drop'].forEach(ev=>dropZone.addEventListener(ev,e=>{e.preventDefault(); dropZone.style.background='#f8faff';}));
+  ['dragleave','drop'].forEach(ev=>dropZone.addEventListener(ev,e=>{e.preventDefault(); dropZone.style.background:'#f8faff';}));
   dropZone.addEventListener('drop', async e=>{for(const f of Array.from(e.dataTransfer.files||[])) await handleFile(f);});
 
   async function handleFile(file){
@@ -733,12 +749,12 @@
 
       if (allRg.size === 0) {
         for (const m of text.matchAll(/\b(\d{9,18})\b/g)) {
-          const num = m[1]; if (!/^20\d{6,}$/.test(num)) allRg.add(num);
+          const num = normalizeRg(m[1]); if (num && !/^20\d{6,}$/.test(num)) allRg.add(num);
         }
       }
       if (allRg.size === 0 && rgFromName.length) {
         let d = await readStore(); d = await ensureShape(d);
-        for (const candidate of rgFromName) if (d.rechnungen && d.rechnungen[candidate]) allRg.add(candidate);
+        for (const candidate of rgFromName) if (d.rechnungen && d.rechnungen[normalizeRg(candidate)]) allRg.add(normalizeRg(candidate));
       }
 
       const fileRef = {name:file.name, url, dataUrl, type:'pdf', source:'upload'};
@@ -753,7 +769,7 @@
         let d = await readStore(); d = await ensureShape(d);
         addFileRefToPackage(d, parsed.paket, fileRef);
         const pkg = (d.pakete || []).find(p => p.nr === parsed.paket);
-        if (pkg?.rechnungen?.length) for (const rg of pkg.rechnungen) addFileRefToInvoice(d, rg, fileRef);
+        if (pkg?.rechnungen?.length) for (const _rg of pkg.rechnungen) addFileRefToInvoice(d, normalizeRg(_rg), fileRef);
         await writeStore(d);
       }
 
@@ -905,7 +921,7 @@
   document.addEventListener('change', async (e)=>{
     const inp = e.target.closest('.attachPdfInput');
     if (!inp || !inp.files || !inp.files[0]) return;
-    const rg = inp.getAttribute('data-rg');
+    const rg = normalizeRg(inp.getAttribute('data-rg'));
     const file = inp.files[0];
 
     const blob = file;
@@ -924,19 +940,50 @@
     toast(`PDF zu RG ${rg} verknüpft ✅`);
   });
 
-  /* ===== Öffnen (synchron) ===== */
-  function openPdfNow(fileOrUrl) {
-    try {
-      let dataUrl=null, url=null;
-      if (typeof fileOrUrl==='string') {
-        if (fileOrUrl.startsWith('data:application/pdf')) dataUrl=fileOrUrl; else url=fileOrUrl;
-      } else if (fileOrUrl && typeof fileOrUrl==='object') {
-        dataUrl=fileOrUrl.dataUrl||null; url=fileOrUrl.url||null;
-      }
-      if (dataUrl) { window.open(dataUrl, '_blank', 'noopener'); return; }
-      if (url)     { window.open(url,     '_blank', 'noopener'); return; }
-      toast('Kein PDF verknüpft.');
-    } catch(e){ console.error(e); toast('PDF konnte nicht geöffnet werden.'); }
+  /* ===== v27.2.5 – immer sichere PDF-Anzeige ===== */
+  async function ensurePdfDataUrl(fileOrUrl){
+    if (typeof fileOrUrl === 'string') {
+      if (fileOrUrl.startsWith('data:application/pdf')) return fileOrUrl;
+      const res = await fetch(fileOrUrl);
+      const blob = await res.blob();
+      return await blobToDataUrl(blob);
+    }
+    const f = fileOrUrl || {};
+    if (f.dataUrl && f.dataUrl.startsWith('data:application/pdf')) return f.dataUrl;
+    if (f.url) {
+      const res = await fetch(f.url);
+      const blob = await res.blob();
+      const durl = await blobToDataUrl(blob);
+      try {
+        let d = await readStore();
+        let mutated = false;
+        for (const p of (d.pakete || [])) {
+          const i = (p.files || []).indexOf(f);
+          if (i >= 0) { p.files[i].dataUrl = durl; mutated = true; }
+        }
+        for (const r of Object.values(d.rechnungen || {})) {
+          const i = (r.files || []).indexOf(f);
+          if (i >= 0) { r.files[i].dataUrl = durl; mutated = true; }
+        }
+        if (mutated) await writeStore(d);
+      } catch {}
+      return durl;
+    }
+    throw new Error('Keine Quelle für PDF gefunden');
+  }
+
+  async function openPdfViewer(fileOrUrl){
+    try{
+      const dataUrl = await ensurePdfDataUrl(fileOrUrl);
+      const w = window.open('about:blank', '_blank', 'noopener');
+      if (!w) { alert('Popup blockiert – bitte Popups erlauben.'); return; }
+      const html = `
+        <!doctype html><html><head><meta charset="utf-8">
+        <title>PDF</title><meta name="viewport" content="width=device-width, initial-scale=1" />
+        <style>html,body{height:100%;margin:0} embed{width:100%;height:100%;border:0}</style>
+        </head><body><embed src="${dataUrl}" type="application/pdf" /></body></html>`;
+      w.document.open(); w.document.write(html); w.document.close();
+    }catch(e){ console.error(e); toast('PDF konnte nicht geöffnet werden.'); }
   }
 
   document.addEventListener('click', function (e) {
@@ -947,35 +994,52 @@
     (async ()=>{
       const d = await readStore();
       if (a.classList.contains('rg-link')) {
-        const rg = a.getAttribute('data-rg');
+        const rg = normalizeRg(a.getAttribute('data-rg'));
         const r = (d.rechnungen||{})[rg];
-        if (r?.files?.length) return openPdfNow(r.files[0]);
-        const donor = (d.pakete||[]).find(p=>(p.rechnungen||[]).includes(rg) && p.files && p.files.length);
-        if (donor) return openPdfNow(donor.files[0]);
+        if (r?.files?.length) { await openPdfViewer(r.files[0]); return; }
+        const donor = (d.pakete||[]).find(p=>(p.rechnungen||[]).map(normalizeRg).includes(rg) && p.files && p.files.length);
+        if (donor) { await openPdfViewer(donor.files[0]); return; }
         return toast('Zu dieser Rechnung ist keine PDF verknüpft.');
       }
       if (a.classList.contains('pkg-link')) {
         const nr = a.getAttribute('data-paket');
         const p = (d.pakete||[]).find(x=>x.nr===nr);
-        if (p?.files?.length) return openPdfNow(p.files[0]);
+        if (p?.files?.length) { await openPdfViewer(p.files[0]); return; }
         return toast('Zu diesem Paket ist keine PDF verknüpft.');
       }
       if (a.classList.contains('pdf-open')) {
         const src = a.getAttribute('data-src') || '';
-        const hasData = a.getAttribute('data-hasdata')==='1';
         if (!src) { toast('Kein PDF verknüpft.'); return; }
-        if (hasData && src.startsWith('data:application/pdf')) { window.open(src,'_blank','noopener'); return; }
-        if (/^(blob:|https?:)/.test(src)) { window.open(src,'_blank','noopener'); return; }
-        openPdfNow(src);
+        await openPdfViewer(src);
+        return;
       }
     })();
   }, true);
 
-  /* ===== Init ===== */
+  /* ===== Init (inkl. Migration RG-Keys) ===== */
   (async ()=>{
     setTab('main');
     await set(SETTINGS_KEY, await readSettings());
     let d=await readStore(); d=pruneOld(d||{kundennummer:'',pakete:[],rechnungen:{}}); await writeStore(d);
+
+    // Migration: RG-Schlüssel normalisieren (v27.2.4)
+    try{
+      d = await readStore(); if(d && d.rechnungen){
+        let changed=false; const newMap={};
+        for(const [k,v] of Object.entries(d.rechnungen)){
+          const nk=normalizeRg(k); if(!nk) { changed=true; continue; }
+          if(!newMap[nk]) newMap[nk] = {...v, nr:nk};
+          else {
+            const dst=newMap[nk];
+            dst.items = [...(dst.items||[]), ...(v.items||[])];
+            dst.files = [...(dst.files||[]), ...(v.files||[])];
+            if(!dst.datum && v.datum) dst.datum = v.datum;
+            changed=true;
+          }
+        }
+        if(changed){ d.rechnungen=newMap; await writeStore(d); }
+      }
+    }catch{}
 
     await migrateBlobUrlsToDataUrl(d);
     await enrichPackagesWithRgFromFiles(await readStore());
