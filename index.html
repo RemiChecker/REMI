@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Presse Remi – Abgleich | Version 27.1.2 | Made by Durdu 2025 -->
+<!-- Presse Remi – Abgleich | Version 27.2.1 | Made by Durdu 2025 -->
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
@@ -7,9 +7,8 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Presse Remi – Abgleich v27.1.2</title>
+  <title>Presse Remi – Abgleich v27.2.1</title>
   <meta name="theme-color" content="#0a84ff">
-
   <style>
     :root { --blue:#0a84ff; --muted:#666; }
     *{box-sizing:border-box}
@@ -46,23 +45,15 @@
     .alert{display:none;margin:.6rem 0;padding:.6rem .8rem;border:1px solid #ffd6d6;background:#fff2f2;color:#a40000;border-radius:.6rem}
     .alert b{color:#a40000}
   </style>
-
-  <!-- IndexedDB Helper -->
   <script src="https://cdn.jsdelivr.net/npm/idb-keyval@6/dist/idb-keyval-iife.min.js"></script>
-
-  <!-- PDF.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
     window.pdfjsLib ||= window['pdfjs-dist/build/pdf'];
     pdfjsLib.GlobalWorkerOptions.workerSrc =
       "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   </script>
-
-  <!-- Export -->
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
-
-  <!-- Google Identity Services -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
@@ -70,13 +61,14 @@
 
   <header>
     <div>
-      <h1>Presse Remi – Abgleich <span class="version">v27.1.2</span></h1>
+      <h1>Presse Remi – Abgleich <span class="version">v27.2.1</span></h1>
       <div class="muted">Lokale Speicherung. Offline nutzbar.</div>
       <div class="banner">ℹ️ Rechnungen & Remissionen werden nur <u>3 Monate</u> intern gespeichert. Ältere Einträge werden automatisch gelöscht.</div>
       <div id="alertBox" class="alert"></div>
     </div>
     <div style="margin-left:auto;display:flex;gap:.5rem;align-items:center;">
       <button id="forceUpdate">Update erzwingen</button>
+      <button id="repairDeep">Reparatur starten</button>
       <span class="pill">Vollversion</span>
     </div>
   </header>
@@ -87,7 +79,6 @@
     <div class="tab" data-tab="stats">Statistik</div>
   </div>
 
-  <!-- Übersicht -->
   <section data-view="main">
     <h2>1) Daten eingeben</h2>
     <p class="muted">Option A: JSON einfügen • Option B: Datei importieren (PDF, EML, JSON) • Option C: per Gmail abrufen (nur Qtrado).</p>
@@ -140,7 +131,6 @@
     </div>
   </section>
 
-  <!-- Einstellungen -->
   <section data-view="settings" style="display:none;">
     <h2>Einstellungen</h2>
     <div style="display:grid;grid-template-columns:180px 1fr;gap:.5rem .75rem;max-width:720px;">
@@ -153,19 +143,16 @@
     <p class="muted">Standard: es werden nur Absender mit „@qtrado.de“ verarbeitet.</p>
   </section>
 
-  <!-- Statistik -->
   <section data-view="stats" style="display:none;">
     <h2>Statistik</h2>
     <div id="statsBox" class="card"></div>
   </section>
 
-  <!-- Footer / Admin -->
   <footer>
-    <div>Made by Durdu 2025 – Version 27.1.2</div>
+    <div>Made by Durdu 2025 – Version 27.2.1</div>
     <div><a href="#" id="adminLink">Admin Login</a></div>
   </footer>
 
-  <!-- Admin Login Modal -->
   <div id="adminModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);align-items:center;justify-content:center;z-index:9999">
     <div style="background:#fff;padding:1.2rem;border-radius:.6rem;max-width:320px;width:100%">
       <h3>Admin Login</h3>
@@ -185,32 +172,26 @@
   </section>
 
   <script>
-  /* ===== Version ===== */
-  const APP_VERSION = "27.1.2";
+  const APP_VERSION = "27.2.1";
 
-  /* ===== Fehler sichtbar machen ===== */
   window.addEventListener('error', (e)=> {
     const el = document.getElementById('toast');
     el.textContent = 'Fehler: ' + (e?.message || e.toString());
     el.style.display = 'block';
   });
 
-  /* ===== Google Client-ID (Gmail) ===== */
   const GOOGLE_CLIENT_ID = "836994805779-78af1p2hpubkidbklko086s93j165lv5.apps.googleusercontent.com";
   let gisClient=null, accessToken=null;
 
-  /* ===== Tabs ===== */
   const TABS=[...document.querySelectorAll('.tab')], VIEWS=[...document.querySelectorAll('section[data-view]')];
   function setTab(name){TABS.forEach(t=>t.classList.toggle('active',t.dataset.tab===name)); VIEWS.forEach(v=>v.style.display=v.dataset.view===name?'':'none');}
   TABS.forEach(t=>t.addEventListener('click',()=>setTab(t.dataset.tab)));
 
-  /* ===== Cache sauber halten ===== */
   (async()=>{try{
     if('serviceWorker' in navigator){const r=await navigator.serviceWorker.getRegistrations();for(const x of r) await x.unregister();}
     if('caches' in window){const k=await caches.keys();await Promise.all(k.map(c=>caches.delete(c)));}
   }catch(e){}})();
 
-  /* ===== Speicher (IndexedDB/LocalStorage Fallback) ===== */
   const __idb = window.idbKeyval || { get: async k=>JSON.parse(localStorage.getItem(k)||'null'), set: async (k,v)=>localStorage.setItem(k,JSON.stringify(v)), del: async k=>localStorage.removeItem(k) };
   const {get,set,del}=__idb;
   const KEY='presse-remi-daten-v13', SETTINGS_KEY='presse-remi-settings-v10';
@@ -227,7 +208,6 @@
   const writeStore=async(o)=> set(KEY, await ensureShape(o));
   const readSettings=()=>get(SETTINGS_KEY).then(x=>x||{allowed1:'',allowed2:'',allowed3:'',keywords:'Remission,Rechnung'});
 
-  /* ===== Utils ===== */
   const $=sel=>document.querySelector(sel);
   const toast=m=>{const el=document.getElementById('toast');el.textContent=m;el.style.display='block';setTimeout(()=>el.style.display='none',2500);};
   const norm=s=>(s||'').toString().toLowerCase();
@@ -240,33 +220,7 @@
   const decodeB64Url = s => { try { return atob(String(s||'').replace(/-/g,'+').replace(/_/g,'/')); } catch { return ''; } };
   const blobToDataUrl = (blob)=>new Promise(res=>{const r=new FileReader(); r.onload=()=>res(r.result); r.readAsDataURL(blob);});
 
-  /* ===== Migration: blob:-URLs -> dataUrl persistieren ===== */
-  async function migrateBlobUrlsToDataUrl(data) {
-    let changed = false;
-    async function fixList(list) {
-      for (const f of (list || [])) {
-        if (!f) continue;
-        if (!f.dataUrl && f.url && /^blob:/.test(f.url)) {
-          try {
-            const res = await fetch(f.url); // klappt nur in derselben Sitzung
-            const blob = await res.blob();
-            const reader = new FileReader();
-            f.dataUrl = await new Promise(ok => {
-              reader.onload = () => ok(reader.result);
-              reader.readAsDataURL(blob);
-            });
-            changed = true;
-          } catch { /* Blob ist tot – bleibt ohne dataUrl, bitte neu importieren */ }
-        }
-      }
-    }
-    for (const p of (data.pakete || [])) await fixList(p.files);
-    for (const r of Object.values(data.rechnungen || {})) await fixList(r.files);
-    if (changed) await writeStore(data);
-    return changed;
-  }
-
-  /* ===== RG-Nummern erkennen – 5–18 Stellen ===== */
+  /* ========== RG-Erkennung (5–18 Stellen) ========== */
   function extractInvoiceNumbersFromText(txt){
     if(!txt) return [];
     const out = new Set();
@@ -280,7 +234,7 @@
     for (const re of labeled) for (const m of txt.matchAll(re)) out.add(m[1]);
     for (const m of txt.matchAll(/\b(\d{9,18})\b/g)) {
       const num=m[1];
-      if (/^20\d{6,}$/.test(num)) continue; // Datum-/Jahrespräfix vermeiden
+      if (/^20\d{6,}$/.test(num)) continue;
       out.add(num);
     }
     return Array.from(out);
@@ -302,39 +256,7 @@
     return Array.from(out);
   }
 
-  /* ===== Parser ===== */
-  function scanTextForFields(t){
-    if(!t) return {};
-    const paket=(t.match(/(?:paket(?:nr|nummer)?|paket)\s*[-: ]\s*([0-9]{3,})/i) || t.match(/\bPaket\s*([0-9]{3,})\b/i))?.[1];
-    const kdnr=(t.match(/kunden(?:nr|nummer)?\s*[-: ]\s*([0-9]{3,})/i) || t.match(/\bKdnr\.?\s*([0-9]{3,})\b/i))?.[1];
-
-    const rgHits = extractInvoiceNumbersFromText(t);
-
-    const iso=(t.match(/(20[2-5][0-9]-[01][0-9]-[0-3][0-9])/))?.[1];
-    const de=(t.match(/([0-3][0-9]\.[01][0-9]\.20[2-5][0-9])/))?.[1];
-    const datum=iso || (de ? de.split('.').reverse().join('-') : '');
-
-    const isInvoice = /rechnung|rechnungsnummer|rg[- :]?\d+/i.test(t) && !/gutschrift/i.test(t);
-    const isRemi    = /remission|remi[- ]?liste|rückgabe|gutschrift/i.test(t) || !isInvoice;
-
-    const lines = t.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-    const asNumber = s => { if(!s) return null; s=s.replace(/\s/g,'').replace(/\./g,'').replace(/,/g,'.'); const v=parseFloat(s); return isFinite(v)?v:null; };
-    const items=[];
-    for(let i=0;i<lines.length;i++){
-      const L=lines[i];
-      let m = L.match(/^(\d{8,14}|[A-Z0-9][A-Z0-9._-]{2,})\s+(.+?)\s+(\d{1,6})\s+(\d+[.,]\d{2})\s+(\d+[.,]\d{2})$/i);
-      if(m){ const [_, code, title, qty, unit, total]=m; items.push({code, title, qty:+qty, unit:asNumber(unit), total:asNumber(total)}); continue; }
-      let m1=L.match(/^(\d{8,14}|[A-Z0-9][A-Z0-9._-]{2,})\s+(.+)$/i);
-      if(m1 && i+1<lines.length){
-        const L2=lines[i+1];
-        let m2 = L2.match(/^(\d{1,6})\s*(?:x|×)?\s*(\d+[.,]\d{2})\s*(?:=|≈)?\s*(\d+[.,]\d{2})$/i)
-               || L2.match(/^(\d{1,6})\s+(\d+[.,]\d{2})\s+(\d+[.,]\d{2})$/i);
-        if(m2){ const [__, qty, unit, total]=m2; items.push({code:m1[1], title:m1[2], qty:+qty, unit:asNumber(unit), total:asNumber(total)}); i++; continue; }
-      }
-    }
-
-    return { paket, kdnr, rechnungen: rgHits, datum, type: isInvoice ? 'invoice' : (isRemi ? 'remission' : 'unknown'), items };
-  }
+  /* ========== PDF lesen ========== */
   async function pdfBlobToText(blob){
     const arr=await blob.arrayBuffer();
     const pdf=await pdfjsLib.getDocument({data:arr}).promise;
@@ -346,8 +268,11 @@
     }
     return t;
   }
+  async function extractRgFromPdfBlob(blob){
+    try{ return extractInvoiceNumbersFromText(await pdfBlobToText(blob)) || []; }catch{ return []; }
+  }
 
-  /* ===== Abgleich ===== */
+  /* ========== Diff/Abgleich ========== */
   function diffItems(remiItems, invItems){
     const idx = arr => {
       const map=new Map();
@@ -372,7 +297,7 @@
     return {missing, extra, mismatch};
   }
 
-  /* ===== Datei-Referenzen ===== */
+  /* ========== Datei-Referenzen ========== */
   function addFileRefToPackage(data, paketNr, fileObj){
     let p = (data.pakete||[]).find(x=>x.nr===paketNr);
     if(!p){ p={nr:paketNr||'unbekannt', datum:'', status:'offen', rechnungen:[], positionen:[], differenzen:[], files:[]}; data.pakete.push(p); }
@@ -383,7 +308,7 @@
     r.files ||= []; r.files.push(fileObj);
   }
 
-  /* ===== Merge + Status ===== */
+  /* ========== Merge + Status ========== */
   async function mergeParsedIntoStore(parsed, fileRef){
     let data = await readStore(); data = await ensureShape(data);
 
@@ -419,18 +344,13 @@
       if(parsed.type==='invoice' && parsed.rechnungen?.length){
         for(const rg of parsed.rechnungen){ if(!p.rechnungen.includes(rg)) p.rechnungen.push(rg); }
         if(p.files?.length){
-          for(const rg of parsed.rechnungen){
-            for(const f of p.files) addFileRefToInvoice(data, rg, f);
-          }
+          for(const rg of parsed.rechnungen){ for(const f of p.files) addFileRefToInvoice(data, rg, f); }
         }
       }
-
       if(fileRef && parsed.paket){
         addFileRefToPackage(data, parsed.paket, fileRef);
         const pkgNow = (data.pakete || []).find(x => x.nr === parsed.paket);
-        if (pkgNow && Array.isArray(pkgNow.rechnungen)) {
-          for (const rg of pkgNow.rechnungen) addFileRefToInvoice(data, rg, fileRef);
-        }
+        if (pkgNow && Array.isArray(pkgNow.rechnungen)) for (const rg of pkgNow.rechnungen) addFileRefToInvoice(data, rg, fileRef);
       }
     }
 
@@ -438,7 +358,6 @@
       p.differenzen = [];
       const linkedInvoices = (p.rechnungen || []).map(rg => data.rechnungen[rg]).filter(Boolean);
       if (!linkedInvoices.length) { p.status = 'offen'; continue; }
-
       let hasIssues = false;
       for (const rg of (p.rechnungen || [])) {
         const r = data.rechnungen[rg];
@@ -457,32 +376,109 @@
     return true;
   }
 
-  /* ===== Auto-Reparatur: Rechnung ohne PDF -> von Paketen übernehmen ===== */
-  async function repairInvoiceFilesFromPackages(data) {
+  /* ========== Migration & Reparatur ========== */
+  async function migrateBlobUrlsToDataUrl(data) {
     let changed = false;
-    for (const [rg, r] of Object.entries(data.rechnungen || {})) {
-      if (r.files && r.files.length) continue;
-      const donors = (data.pakete || []).filter(p => (p.rechnungen || []).includes(rg) && p.files && p.files.length);
-      if (!donors.length) continue;
-      r.files ||= [];
-      for (const p of donors) {
-        for (const f of p.files) {
-          if (!r.files.some(x => x.url === f.url && x.name === f.name)) {
-            r.files.push(f);
+    async function fixList(list) {
+      for (const f of (list || [])) {
+        if (!f) continue;
+        if (!f.dataUrl && f.url && /^blob:/.test(f.url)) {
+          try {
+            const res = await fetch(f.url);
+            const blob = await res.blob();
+            const reader = new FileReader();
+            f.dataUrl = await new Promise(ok => { reader.onload = () => ok(reader.result); reader.readAsDataURL(blob); });
             changed = true;
-          }
+          } catch {}
         }
       }
-      data.rechnungen[rg] = r;
+    }
+    for (const p of (data.pakete || [])) await fixList(p.files);
+    for (const r of Object.values(data.rechnungen || {})) await fixList(r.files);
+    if (changed) await writeStore(data);
+    return changed;
+  }
+
+  async function enrichPackagesWithRgFromFiles(data){
+    let changed = false;
+    for (const p of (data.pakete || [])) {
+      const known = new Set(p.rechnungen || []);
+      for (const f of (p.files || [])) {
+        if (f?.type !== 'pdf') continue;
+        const fileNameHits = extractInvoiceNumbersFromFileName(f.name || '') || [];
+        let contentHits = [];
+        if (fileNameHits.length === 0) {
+          try{
+            let blob = null;
+            if (f.dataUrl?.startsWith('data:application/pdf')) {
+              const bstr = atob(f.dataUrl.split(',')[1] || '');
+              const arr = Uint8Array.from(bstr, c=>c.charCodeAt(0));
+              blob = new Blob([arr], {type:'application/pdf'});
+            } else if (f.url) {
+              const res = await fetch(f.url);
+              blob = await res.blob();
+            }
+            if (blob) contentHits = await extractRgFromPdfBlob(blob);
+          }catch{}
+        }
+        const hits = new Set([...fileNameHits, ...contentHits]);
+        for (const rg of hits) {
+          if (!known.has(rg)) { p.rechnungen.push(rg); known.add(rg); changed = true; }
+        }
+      }
     }
     if (changed) await writeStore(data);
     return changed;
   }
 
-  /* ===== Render & UI ===== */
+  async function relinkInvoicesFromAllFiles(data){
+    let changed = false;
+    const allFiles = [];
+    for (const p of (data.pakete || [])) for (const f of (p.files || [])) if (f?.type==='pdf') allFiles.push({scope:'paket', owner:p.nr, f});
+    for (const r of Object.values(data.rechnungen || {})) for (const f of (r.files || [])) if (f?.type==='pdf') allFiles.push({scope:'rg', owner:r.nr, f});
+    const indexByName = new Map();
+    for (const x of allFiles) {
+      const hits = new Set(extractInvoiceNumbersFromFileName(x.f.name || ''));
+      for (const rg of hits) {
+        const arr = indexByName.get(rg) || [];
+        arr.push(x.f);
+        indexByName.set(rg, arr);
+      }
+    }
+    for (const [rg, rec] of Object.entries(data.rechnungen || {})) {
+      if (rec.files && rec.files.length) continue;
+      const byName = indexByName.get(rg) || [];
+      if (byName.length) { rec.files = [...byName]; changed = true; continue; }
+      for (const x of allFiles) {
+        try{
+          let blob = null;
+          if (x.f.dataUrl?.startsWith('data:application/pdf')) {
+            const bstr = atob(x.f.dataUrl.split(',')[1] || '');
+            const arr = Uint8Array.from(bstr, c=>c.charCodeAt(0));
+            blob = new Blob([arr], {type:'application/pdf'});
+          } else if (x.f.url) {
+            const res = await fetch(x.f.url);
+            blob = await res.blob();
+          }
+          if (!blob) continue;
+          const hits = await extractRgFromPdfBlob(blob);
+          if (hits.includes(rg)) {
+            rec.files ||= [];
+            if (!rec.files.some(ff => ff.url===x.f.url && ff.name===x.f.name)) {
+              rec.files.push(x.f);
+              changed = true;
+            }
+          }
+        }catch{}
+      }
+    }
+    if (changed) await writeStore(data);
+    return changed;
+  }
+
+  /* ========== Render & UI ========== */
   const inputArea=$('#inputArea'), kdnrSelect=$('#kdnrSelect'), searchInput=$('#searchInput');
-  const dateFrom=$('#dateFrom'), dateTo=$('#dateTo');
-  const alertBox=$('#alertBox');
+  const dateFrom=$('#dateFrom'), dateTo=$('#dateTo'); const alertBox=$('#alertBox');
   let onlyMissing=false;
 
   function computeStats(data){
@@ -492,35 +488,30 @@
     return {pakete:list.length, abw, sum};
   }
 
-  /* -- FIX: Links bevorzugen dataUrl -- */
+  // Links für PDFs – unverändert, aber ohne Encoding
   function filesHtml(files){
     files = files || [];
     if (!files.length) return '<span class="muted">keine PDF</span>';
     return files.map((f,i)=>{
       const hasData = !!f.dataUrl;
-      const hrefData = encodeURIComponent(hasData ? f.dataUrl : (f.url || ''));
-      return `<a href="#"
-                class="pdf-open"
-                data-file-url="${hrefData}"
-                data-file-data="${hasData ? '1' : '0'}"
-                data-file-idx="${i}">PDF ${i+1}</a>`;
+      const raw = hasData ? f.dataUrl : (f.url || '');
+      return `<a href="#" class="pdf-open" data-src="${raw}" data-hasdata="${hasData ? '1':'0'}" data-file-idx="${i}">PDF ${i+1}</a>`;
     }).join(' • ');
   }
 
-  function pkgRowHtml(p,k){
+  function pkgRowHtml(p){
     const hasIssues = (p.differenzen||[]).some(x=>x.missing?.length||x.extra?.length||x.mismatch?.length);
     const re=(p.rechnungen||[]).map(r=>`<a href="#" data-open-rg="${r}" class="chip" style="${chipStyleFor(r)}" title="Rechnung öffnen">${r}</a>`).join('');
     const diffs = (p.differenzen||[]).map(d=>{
-      const miss = (d.missing||[]).map(m=>{ const [code,title]=String(m.key).split('|'); return `<li>❌ fehlt: <b>${code||''}</b> – ${title||''} (Remi erwartet ${m.expected?.qty??'?'})</li>`; }).join('');
-      const extra = (d.extra||[]).map(e=>{ const [code,title]=String(e.key).split('|'); return `<li>➕ extra: <b>${code||''}</b> – ${title||''} (nur auf Rechnung: ${e.found?.qty??'?'})</li>`; }).join('');
-      const mm = (d.mismatch||[]).map(x=>{ const [code,title]=String(x.key).split('|'); return `<li>⚖️ Menge abw.: <b>${code||''}</b> – ${title||''} (Remi ${x.remiQty??'?'}, Rechn. ${x.invQty??'?'})</li>`; }).join('');
+      const miss = (d.missing||[]).map(m=>{ const [code,title]=String(m.key).split('|'); return `<li>❌ fehlt: <b>${code||''}</b> – ${title||''} (Remi ${m.expected?.qty??'?'})</li>`; }).join('');
+      const extra = (d.extra||[]).map(e=>{ const [code,title]=String(e.key).split('|'); return `<li>➕ extra: <b>${code||''}</b> – ${title||''} (nur RG: ${e.found?.qty??'?'})</li>`; }).join('');
+      const mm = (d.mismatch||[]).map(x=>{ const [code,title]=String(x.key).split('|'); return `<li>⚖️ Menge abw.: <b>${code||''}</b> – ${title||''} (Remi ${x.remiQty??'?'}, RG ${x.invQty??'?'})</li>`; }).join('');
       const ok = (!miss && !extra && !mm) ? '<div class="muted">✓ Abgleich ok</div>' : '';
       return `<div class="card" style="margin:.35rem 0;padding:.45rem .6rem;border-left:4px solid ${colorFor(d.rg)}">
         <div class="muted" style="margin-bottom:.2rem">Abgleich zu RG <b style="color:${colorFor(d.rg)}">${d.rg}</b></div>
         ${ok || `<ul style="margin:.2rem 0 .2rem 1rem">${miss}${extra}${mm}</ul>`}
       </div>`;
     }).join('') || '<div class="muted">Keine Abgleiche</div>';
-
     const statusLabel = p.status === 'ok' ? 'ok' : (p.status || '');
     return `<details class="card" ${hasIssues?'open':''}>
       <summary class="row">
@@ -537,14 +528,25 @@
     </details>`;
   }
 
-  function invRowHtml(r){
+  // WICHTIG: Rechnungs-Render zeigt auch Paket-PDFs, falls rec.files leer
+  function invRowHtml(r, data){
+    // Effektive PDF-Liste = eigene PDFs + alle Paket-PDFs, die diese RG referenzieren
+    const donorFiles = [];
+    for (const p of (data.pakete || [])) {
+      if ((p.rechnungen || []).includes(r.nr)) {
+        for (const f of (p.files || [])) {
+          if (f?.type==='pdf' && !donorFiles.some(x=>x.name===f.name && x.url===f.url)) donorFiles.push(f);
+        }
+      }
+    }
+    const effectiveFiles = [...(r.files||[]), ...donorFiles];
     const items = (r.items||[]).slice(0,12).map(it=>`<li><b>${it.code||''}</b> – ${it.title||''} • Menge: ${it.qty??''}</li>`).join('');
-    const noPdfHint = (!r.files || !r.files.length) ? '<div class="muted">Keine PDF verknüpft</div>' : '';
+    const noPdfHint = (!effectiveFiles.length) ? '<div class="muted">Keine PDF verknüpft</div>' : '';
     return `<details class="card">
       <summary class="row">
         <div><a href="#" class="rg-link" data-rg="${r.nr}"><b>RG ${r.nr}</b></a></div>
         <div class="muted">${r.datum||''}</div>
-        <div>${filesHtml(r.files)}</div>
+        <div>${filesHtml(effectiveFiles)}</div>
         <div class="muted">Positionen: ${(r.items||[]).length}</div>
       </summary>
       ${noPdfHint}
@@ -595,8 +597,8 @@
         && (!f && !t ? true : (d && (!f || d>=new Date(f+'T00:00:00')) && (!t || d<=new Date(t+'T23:59:59'))));
     });
 
-    $('#overviewPackages').innerHTML = pkgs.length ? pkgs.map(p=>pkgRowHtml(p,p._k)).join('') : '<div class="muted">Keine Pakete…</div>';
-    $('#overviewInvoices').innerHTML = invs.length ? invs.map(invRowHtml).join('') : '<div class="muted">Keine Rechnungen…</div>';
+    $('#overviewPackages').innerHTML = pkgs.length ? pkgs.map(pkgRowHtml).join('') : '<div class="muted">Keine Pakete…</div>';
+    $('#overviewInvoices').innerHTML = invs.length ? invs.map(r=>invRowHtml(r, data)).join('') : '<div class="muted">Keine Rechnungen…</div>';
 
     const s=computeStats({pakete:pkgs}); 
     if(pkgs.length){ $('#totals').hidden=false; $('#badgeCount').textContent=`${s.pakete} Pakete`; $('#badgeMissing').textContent=`${s.abw} abweichend`; $('#badgeSum').textContent=`Summe: ${fmtEuro(s.sum)}`; } 
@@ -614,15 +616,37 @@
         let d=await readStore();
         const rg=a.getAttribute('data-open-rg');
         const r=(d.rechnungen||{})[rg];
-        if(r?.files?.length){ return openPdfSmart(r.files[0]); }
+        if(r?.files?.length){ return openPdfNow(r.files[0]); }
         const donor=(d.pakete||[]).find(p=>(p.rechnungen||[]).includes(rg) && p.files && p.files.length);
-        if(donor) return openPdfSmart(donor.files[0]);
+        if(donor) return openPdfNow(donor.files[0]);
         toast('Zu dieser Rechnung ist keine PDF verknüpft.');
       });
     });
   }
 
-  /* ===== Datei-Import (JSON/EML/PDF) ===== */
+  /* ========== Auto-Reparatur: Rechnung ohne PDF -> von Paketen übernehmen ========== */
+  async function repairInvoiceFilesFromPackages(data) {
+    let changed = false;
+    for (const [rg, r] of Object.entries(data.rechnungen || {})) {
+      if (r.files && r.files.length) continue;
+      const donors = (data.pakete || []).filter(p => (p.rechnungen || []).includes(rg) && p.files && p.files.length);
+      if (!donors.length) continue;
+      r.files ||= [];
+      for (const p of donors) {
+        for (const f of p.files) {
+          if (!r.files.some(x => x.url === f.url && x.name === f.name)) {
+            r.files.push(f);
+            changed = true;
+          }
+        }
+      }
+      data.rechnungen[rg] = r;
+    }
+    if (changed) await writeStore(data);
+    return changed;
+  }
+
+  /* ========== Datei-Import (JSON/EML/PDF) ========== */
   document.getElementById('importBtn').addEventListener('click',()=>document.getElementById('importFile').click());
   document.getElementById('importFile').addEventListener('change',async e=>{for(const f of Array.from(e.target.files||[])) await handleFile(f); e.target.value='';});
   const dropZone=document.getElementById('dropZone');
@@ -660,28 +684,20 @@
       const rgFromName = extractInvoiceNumbersFromFileName(file.name);
       const allRg = new Set([...(parsed.rechnungen || []), ...rgFromName]);
 
-      // Fallback-Heuristiken
       if (allRg.size === 0) {
         for (const m of text.matchAll(/\b(\d{9,18})\b/g)) {
-          const num = m[1];
-          if (!/^20\d{6,}$/.test(num)) allRg.add(num);
+          const num = m[1]; if (!/^20\d{6,}$/.test(num)) allRg.add(num);
         }
       }
       if (allRg.size === 0 && rgFromName.length) {
         let d = await readStore(); d = await ensureShape(d);
-        for (const candidate of rgFromName) {
-          if (d.rechnungen && d.rechnungen[candidate]) allRg.add(candidate);
-        }
+        for (const candidate of rgFromName) if (d.rechnungen && d.rechnungen[candidate]) allRg.add(candidate);
       }
 
       const fileRef = {name:file.name, url, dataUrl, type:'pdf', source:'upload'};
 
       if (allRg.size > 0) {
-        for (const rg of allRg) {
-          let d=await readStore(); d=await ensureShape(d);
-          addFileRefToInvoice(d, rg, fileRef);
-          await writeStore(d);
-        }
+        for (const rg of allRg) { let d=await readStore(); d=await ensureShape(d); addFileRefToInvoice(d, rg, fileRef); await writeStore(d); }
         parsed.rechnungen = Array.from(allRg);
         parsed.type = 'invoice';
       }
@@ -690,9 +706,7 @@
         let d = await readStore(); d = await ensureShape(d);
         addFileRefToPackage(d, parsed.paket, fileRef);
         const pkg = (d.pakete || []).find(p => p.nr === parsed.paket);
-        if (pkg?.rechnungen?.length) {
-          for (const rg of pkg.rechnungen) addFileRefToInvoice(d, rg, fileRef);
-        }
+        if (pkg?.rechnungen?.length) for (const rg of pkg.rechnungen) addFileRefToInvoice(d, rg, fileRef);
         await writeStore(d);
       }
 
@@ -703,7 +717,7 @@
     toast('Dateityp nicht unterstützt');
   }
 
-  /* ===== Export ===== */
+  /* ========== Export ========== */
   function exportJSONdata(data){ const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remi-export.json'; a.click(); }
   function exportCSV(data){
     const rows=[['Kdnr','Paket','Datum','Status','Rechnungen','Summe']];
@@ -727,18 +741,23 @@
     const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remi-differenzen.csv'; a.click();
   }
 
-  /* ===== Buttons & Filter ===== */
+  /* ========== Buttons & Filter ========== */
   const rerenderOnChange = async () => render(await readStore());
-  function normalizeDateRange() {
-    const f = dateFrom.value, t = dateTo.value;
-    if (f && t && new Date(f) > new Date(t)) { dateFrom.value=t; dateTo.value=f; }
-  }
+  function normalizeDateRange() { const f = dateFrom.value, t = dateTo.value; if (f && t && new Date(f) > new Date(t)) { dateFrom.value=t; dateTo.value=f; } }
   document.getElementById('forceUpdate').addEventListener('click', async ()=>{
     try{
       if('serviceWorker' in navigator){const r=await navigator.serviceWorker.getRegistrations();for(const x of r) await x.unregister();}
       if('caches' in window){const k=await caches.keys();await Promise.all(k.map(c=>caches.delete(c)));}
     }catch(e){}
     toast('Update erzwungen – neu laden…'); setTimeout(()=>location.reload(true),600);
+  });
+  document.getElementById('repairDeep').addEventListener('click', async ()=>{
+    let d = await readStore();
+    const a = await enrichPackagesWithRgFromFiles(d);
+    d = await readStore();
+    const b = await relinkInvoicesFromAllFiles(d);
+    toast(`Reparatur abgeschlossen ${a||b ? '✅' : '– keine Änderungen'}`);
+    render(await readStore());
   });
   document.getElementById('toggleMissing').addEventListener('click', async ()=>{ window.onlyMissing=!window.onlyMissing; toast(window.onlyMissing?'Nur abweichende…':'Alle anzeigen'); render(await readStore()); });
   document.getElementById('clearSearch').addEventListener('click', async ()=>{ searchInput.value=''; dateFrom.value=''; dateTo.value=''; toast('Filter zurückgesetzt'); render(await readStore()); });
@@ -749,13 +768,12 @@
   document.getElementById('exportCsv').addEventListener('click', async ()=>exportCSV(await readStore()));
   document.getElementById('exportPdf').addEventListener('click', async ()=>exportPDFdoc(await readStore()));
   document.getElementById('exportDiffCsv').addEventListener('click', async ()=>exportDiffCSV(await readStore()));
-  document.getElementById('settingsSave').addEventListener('click', async ()=>{ const s={allowed1:document.getElementById('allowed1').value.trim(),allowed2:document.getElementById('allowed2').value.trim(),allowed3:document.getElementById('allowed3').value.trim(),keywords:document.getElementById('keywords').value.trim()||'Remission,Rechnung'}; await set(SETTINGS_KEY,s); toast('Einstellungen gespeichert ✅'); });
   searchInput.addEventListener('input', rerenderOnChange);
   kdnrSelect.addEventListener('change', rerenderOnChange);
   dateFrom.addEventListener('change', ()=>{ normalizeDateRange(); rerenderOnChange(); });
   dateTo.addEventListener('change', ()=>{ normalizeDateRange(); rerenderOnChange(); });
 
-  /* ===== Gmail ===== */
+  /* ========== Gmail ========== */
   document.getElementById('gmailConnect').addEventListener('click',()=>{
     if(!window.google?.accounts?.oauth2){ toast("Google API nicht geladen – neu laden"); return; }
     gisClient=google.accounts.oauth2.initTokenClient({
@@ -829,7 +847,7 @@
     }catch(e){ console.error(e); toast('Gmail-Fehler: '+(e.message||e)); }
   });
 
-  /* ===== „PDF hinzufügen“ (Rechnung) ===== */
+  /* ========== „PDF hinzufügen“ (Rechnung) ========== */
   document.addEventListener('click', async (e)=>{
     const btn = e.target.closest('.attachPdfBtn');
     if (!btn) return;
@@ -859,89 +877,70 @@
     toast(`PDF zu RG ${rg} verknüpft ✅`);
   });
 
-  /* ===== PDF öffnen – synchron & iOS robust ===== */
-  async function openPdfSmart(fileOrUrl) {
+  /* ========== Öffnen (synchron) ========== */
+  function openPdfNow(fileOrUrl) {
     try {
-      let dataUrl = null, url = null;
-      if (typeof fileOrUrl === 'string') {
-        url = fileOrUrl;
-      } else if (fileOrUrl && typeof fileOrUrl === 'object') {
-        dataUrl = fileOrUrl.dataUrl || null;
-        url = fileOrUrl.url || null;
+      let dataUrl=null, url=null;
+      if (typeof fileOrUrl==='string') {
+        if (fileOrUrl.startsWith('data:application/pdf')) dataUrl=fileOrUrl; else url=fileOrUrl;
+      } else if (fileOrUrl && typeof fileOrUrl==='object') {
+        dataUrl=fileOrUrl.dataUrl||null; url=fileOrUrl.url||null;
       }
-
-      // Fenster synchron öffnen (Popup-Blocker vermeiden)
-      const w = window.open('', '_blank', 'noopener');
-      if (!w) { toast('Popup blockiert. Bitte Popups erlauben.'); return; }
-
-      if (dataUrl) { w.location.href = dataUrl; return; }
-
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-      if (isIOS && url) {
-        const res = await fetch(url);
-        const blob = await res.blob();
-        const durl = await blobToDataUrl(blob);
-        w.location.href = durl;
-        return;
-      }
-
-      if (url) { w.location.href = url; return; }
-
-      w.close();
+      if (dataUrl) { window.open(dataUrl, '_blank', 'noopener'); return; }
+      if (url)     { window.open(url,     '_blank', 'noopener'); return; }
       toast('Kein PDF verknüpft.');
-    } catch (e) {
-      console.error(e);
-      toast('PDF konnte nicht geöffnet werden.');
-    }
+    } catch(e){ console.error(e); toast('PDF konnte nicht geöffnet werden.'); }
   }
 
-  /* ===== Link-Handler in <summary> (Capture) ===== */
   document.addEventListener('click', function (e) {
     const a = e.target.closest('a.rg-link, a.pkg-link, a.pdf-open');
     if (!a) return;
     e.preventDefault();
     e.stopPropagation();
-
     (async ()=>{
       const d = await readStore();
       if (a.classList.contains('rg-link')) {
         const rg = a.getAttribute('data-rg');
         const r = (d.rechnungen||{})[rg];
-        if (r?.files?.length) return openPdfSmart(r.files[0]);
+        if (r?.files?.length) return openPdfNow(r.files[0]);
         const donor = (d.pakete||[]).find(p=>(p.rechnungen||[]).includes(rg) && p.files && p.files.length);
-        if (donor) return openPdfSmart(donor.files[0]);
+        if (donor) return openPdfNow(donor.files[0]);
         return toast('Zu dieser Rechnung ist keine PDF verknüpft.');
       }
       if (a.classList.contains('pkg-link')) {
         const nr = a.getAttribute('data-paket');
         const p = (d.pakete||[]).find(x=>x.nr===nr);
-        if (p?.files?.length) return openPdfSmart(p.files[0]);
+        if (p?.files?.length) return openPdfNow(p.files[0]);
         return toast('Zu diesem Paket ist keine PDF verknüpft.');
       }
       if (a.classList.contains('pdf-open')) {
-        const url = decodeURIComponent(a.getAttribute('data-file-url')||'');
-        const hasData = a.getAttribute('data-file-data')==='1';
-        if (hasData) return openPdfSmart({dataUrl:url});
-        return openPdfSmart(url);
+        const src = a.getAttribute('data-src') || '';
+        const hasData = a.getAttribute('data-hasdata')==='1';
+        if (!src) { toast('Kein PDF verknüpft.'); return; }
+        if (hasData && src.startsWith('data:application/pdf')) { window.open(src,'_blank','noopener'); return; }
+        if (/^(blob:|https?:)/.test(src)) { window.open(src,'_blank','noopener'); return; }
+        // Fallback
+        openPdfNow(src);
       }
     })();
   }, true);
 
-  /* ===== Init ===== */
+  /* ========== Init ========== */
   (async ()=>{
     setTab('main');
     await set(SETTINGS_KEY, await readSettings());
     let d=await readStore(); d=pruneOld(d||{kundennummer:'',pakete:[],rechnungen:{}}); await writeStore(d);
 
-    // Migration: alte blob:-Links nach Möglichkeit in dataUrl umwandeln
-    await migrateBlobUrlsToDataUrl(d);
+    await migrateBlobUrlsToDataUrl(d);                 // tote blob: zu dataUrl holen (falls möglich)
+    await enrichPackagesWithRgFromFiles(await readStore()); // RGs aus Paket-PDFs nachtragen
+    await relinkInvoicesFromAllFiles(await readStore());    // Rechnungen mit PDFs verlinken
 
     if($('#inputArea')) $('#inputArea').value=JSON.stringify(await readStore(),null,2);
     render(await readStore());
     toast('App geladen ✅ v'+APP_VERSION);
   })();
 
-  /* ===== Admin Login ===== */
+  /* ========== Admin Login ========== */
   const ADMIN_USER = "admin";
   const ADMIN_PASS = "remi2025";
   document.getElementById("adminLink").addEventListener("click", e=>{
