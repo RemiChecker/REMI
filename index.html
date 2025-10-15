@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Presse Remi – Abgleich | Version 27.2.1 | Made by Durdu 2025 -->
+<!-- Presse Remi – Abgleich | Version 27.2.3 | Made by Durdu 2025 -->
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Presse Remi – Abgleich v27.2.1</title>
+  <title>Presse Remi – Abgleich v27.2.3</title>
   <meta name="theme-color" content="#0a84ff">
   <style>
     :root { --blue:#0a84ff; --muted:#666; }
@@ -45,6 +45,7 @@
     .alert{display:none;margin:.6rem 0;padding:.6rem .8rem;border:1px solid #ffd6d6;background:#fff2f2;color:#a40000;border-radius:.6rem}
     .alert b{color:#a40000}
   </style>
+  <!-- libs -->
   <script src="https://cdn.jsdelivr.net/npm/idb-keyval@6/dist/idb-keyval-iife.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
@@ -61,7 +62,7 @@
 
   <header>
     <div>
-      <h1>Presse Remi – Abgleich <span class="version">v27.2.1</span></h1>
+      <h1>Presse Remi – Abgleich <span class="version">v27.2.3</span></h1>
       <div class="muted">Lokale Speicherung. Offline nutzbar.</div>
       <div class="banner">ℹ️ Rechnungen & Remissionen werden nur <u>3 Monate</u> intern gespeichert. Ältere Einträge werden automatisch gelöscht.</div>
       <div id="alertBox" class="alert"></div>
@@ -149,10 +150,11 @@
   </section>
 
   <footer>
-    <div>Made by Durdu 2025 – Version 27.2.1</div>
+    <div>Made by Durdu 2025 – Version 27.2.3</div>
     <div><a href="#" id="adminLink">Admin Login</a></div>
   </footer>
 
+  <!-- Admin Modal -->
   <div id="adminModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);align-items:center;justify-content:center;z-index:9999">
     <div style="background:#fff;padding:1.2rem;border-radius:.6rem;max-width:320px;width:100%">
       <h3>Admin Login</h3>
@@ -172,14 +174,14 @@
   </section>
 
   <script>
-  const APP_VERSION = "27.2.1";
+  const APP_VERSION = "27.2.3";
 
+  /* ===== Basics ===== */
   window.addEventListener('error', (e)=> {
     const el = document.getElementById('toast');
     el.textContent = 'Fehler: ' + (e?.message || e.toString());
     el.style.display = 'block';
   });
-
   const GOOGLE_CLIENT_ID = "836994805779-78af1p2hpubkidbklko086s93j165lv5.apps.googleusercontent.com";
   let gisClient=null, accessToken=null;
 
@@ -220,7 +222,7 @@
   const decodeB64Url = s => { try { return atob(String(s||'').replace(/-/g,'+').replace(/_/g,'/')); } catch { return ''; } };
   const blobToDataUrl = (blob)=>new Promise(res=>{const r=new FileReader(); r.onload=()=>res(r.result); r.readAsDataURL(blob);});
 
-  /* ========== RG-Erkennung (5–18 Stellen) ========== */
+  /* ===== RG-Erkennung ===== */
   function extractInvoiceNumbersFromText(txt){
     if(!txt) return [];
     const out = new Set();
@@ -234,7 +236,7 @@
     for (const re of labeled) for (const m of txt.matchAll(re)) out.add(m[1]);
     for (const m of txt.matchAll(/\b(\d{9,18})\b/g)) {
       const num=m[1];
-      if (/^20\d{6,}$/.test(num)) continue;
+      if (/^20\d{6,}$/.test(num)) continue; // Jahreszahlen etc. filtern
       out.add(num);
     }
     return Array.from(out);
@@ -256,7 +258,7 @@
     return Array.from(out);
   }
 
-  /* ========== PDF lesen ========== */
+  /* ===== PDF lesen ===== */
   async function pdfBlobToText(blob){
     const arr=await blob.arrayBuffer();
     const pdf=await pdfjsLib.getDocument({data:arr}).promise;
@@ -272,7 +274,7 @@
     try{ return extractInvoiceNumbersFromText(await pdfBlobToText(blob)) || []; }catch{ return []; }
   }
 
-  /* ========== Diff/Abgleich ========== */
+  /* ===== Diff/Abgleich ===== */
   function diffItems(remiItems, invItems){
     const idx = arr => {
       const map=new Map();
@@ -297,7 +299,7 @@
     return {missing, extra, mismatch};
   }
 
-  /* ========== Datei-Referenzen ========== */
+  /* ===== Datei-Referenzen ===== */
   function addFileRefToPackage(data, paketNr, fileObj){
     let p = (data.pakete||[]).find(x=>x.nr===paketNr);
     if(!p){ p={nr:paketNr||'unbekannt', datum:'', status:'offen', rechnungen:[], positionen:[], differenzen:[], files:[]}; data.pakete.push(p); }
@@ -308,7 +310,7 @@
     r.files ||= []; r.files.push(fileObj);
   }
 
-  /* ========== Merge + Status ========== */
+  /* ===== Merge + Status ===== */
   async function mergeParsedIntoStore(parsed, fileRef){
     let data = await readStore(); data = await ensureShape(data);
 
@@ -376,7 +378,7 @@
     return true;
   }
 
-  /* ========== Migration & Reparatur ========== */
+  /* ===== Migration & Reparatur ===== */
   async function migrateBlobUrlsToDataUrl(data) {
     let changed = false;
     async function fixList(list) {
@@ -476,7 +478,7 @@
     return changed;
   }
 
-  /* ========== Render & UI ========== */
+  /* ===== Render & UI ===== */
   const inputArea=$('#inputArea'), kdnrSelect=$('#kdnrSelect'), searchInput=$('#searchInput');
   const dateFrom=$('#dateFrom'), dateTo=$('#dateTo'); const alertBox=$('#alertBox');
   let onlyMissing=false;
@@ -488,7 +490,6 @@
     return {pakete:list.length, abw, sum};
   }
 
-  // Links für PDFs – unverändert, aber ohne Encoding
   function filesHtml(files){
     files = files || [];
     if (!files.length) return '<span class="muted">keine PDF</span>';
@@ -528,9 +529,7 @@
     </details>`;
   }
 
-  // WICHTIG: Rechnungs-Render zeigt auch Paket-PDFs, falls rec.files leer
   function invRowHtml(r, data){
-    // Effektive PDF-Liste = eigene PDFs + alle Paket-PDFs, die diese RG referenzieren
     const donorFiles = [];
     for (const p of (data.pakete || [])) {
       if ((p.rechnungen || []).includes(r.nr)) {
@@ -624,7 +623,7 @@
     });
   }
 
-  /* ========== Auto-Reparatur: Rechnung ohne PDF -> von Paketen übernehmen ========== */
+  /* ===== Auto-Reparatur: Rechnung ohne PDF -> Paket-PDFs übernehmen ===== */
   async function repairInvoiceFilesFromPackages(data) {
     let changed = false;
     for (const [rg, r] of Object.entries(data.rechnungen || {})) {
@@ -645,61 +644,56 @@
     if (changed) await writeStore(data);
     return changed;
   }
-<script>
-// ----------- scanTextForFields: Text (Betreff/Body/PDF-Text) → strukturierte Daten -----------
-function scanTextForFields(s){
-  const txt = (s || '').replace(/\r/g,' ');
-  const out = { type:'unknown', paket:'', kdnr:'', datum:'', rechnungen:[], items:[] };
 
-  // Kundennummer
-  {
-    const m = txt.match(/\b(?:kunden(?:nummer)?|kdnr)\s*[:\-]?\s*([0-9]{3,})/i);
-    if (m) out.kdnr = m[1];
-  }
+  /* ===== scanTextForFields (NEU – global, ohne extra <script>) ===== */
+  (function (global) {
+    if (typeof global.scanTextForFields === 'function') return;
 
-  // Paketnummer
-  {
-    const m = txt.match(/\bpaket(?:nr|nummer)?\s*[:\-]?\s*([0-9]{3,})\b/i);
-    if (m) out.paket = m[1];
-  }
-
-  // Datum (YYYY-MM-DD oder DD.MM.YYYY)
-  {
-    let m = txt.match(/\b(20\d{2})[.\-](\d{2})[.\-](\d{2})\b/);
-    if (m) out.datum = `${m[1]}-${m[2]}-${m[3]}`;
-    else {
-      m = txt.match(/\b(\d{2})\.(\d{2})\.(20\d{2})\b/);
-      if (m) out.datum = `${m[3]}-${m[2]}-${m[1]}`;
-    }
-  }
-
-  // Rechnungsnummern (nutzt deine bestehende Helper-Funktion)
-  try { out.rechnungen = extractInvoiceNumbersFromText(txt) || []; }
-  catch { out.rechnungen = []; }
-  if (out.rechnungen.length) out.type = 'invoice';
-
-  // Positionen grob erkennen (mehrere typische Muster)
-  //  z.B. "3 x Bild der Frau", "Bild der Frau 3 Stk", "2 Stück Artikelname"
-  const lines = txt.split(/\n+/);
-  for (const line of lines) {
-    let m =
-      line.match(/^\s*(\d+)\s*[x×]\s+(.+?)\s*(?:\b(Stk|Stück|Ex|Ex\.)\b.*)?$/i) ||
-      line.match(/^\s*(.+?)\s+(\d+)\s*(Stk|Stück|Ex|Ex\.)\b/i) ||
-      line.match(/^\s*(\d+)\s*(Stk|Stück|Ex|Ex\.)\s+(.+?)\s*$/i);
-    if (m) {
-      // normalisieren (Muster 1: Menge vor Titel, Muster 2/3: Titel vor/nach Menge)
-      if (/^\d+$/.test(m[1]) && m[2]) {
-        out.items.push({ title: (m[2]||m[3]||'').trim(), qty: Number(m[1]) });
-      } else if (m[1] && /^\d+$/.test(m[2])) {
-        out.items.push({ title: m[1].trim(), qty: Number(m[2]) });
+    function extractItemsFromText(txt){
+      const items=[];
+      const lines = (txt||'').split(/\n+/);
+      for (const line of lines) {
+        let m =
+          line.match(/^\s*(\d+)\s*[x×]\s+(.+?)\s*(?:\b(Stk|Stück|Ex|Ex\.)\b.*)?$/i) ||
+          line.match(/^\s*(.+?)\s+(\d+)\s*(Stk|Stück|Ex|Ex\.)\b/i) ||
+          line.match(/^\s*(\d+)\s*(Stk|Stück|Ex|Ex\.)\s+(.+?)\s*$/i);
+        if (m) {
+          if (/^\d+$/.test(m[1]) && m[2]) {
+            items.push({ title: (m[2]||m[3]||'').trim(), qty: Number(m[1]) });
+          } else if (m[1] && /^\d+$/.test(m[2])) {
+            items.push({ title: m[1].trim(), qty: Number(m[2]) });
+          }
+        }
       }
+      return items;
     }
-  }
 
-  return out;
-}
-</script>  
-  /* ========== Datei-Import (JSON/EML/PDF) ========== */
+    global.scanTextForFields = function scanTextForFields(s){
+      const txt = (s || '').replace(/\r/g,' ');
+      const out = { type:'unknown', paket:'', kdnr:'', datum:'', rechnungen:[], items:[] };
+
+      const mK = txt.match(/\b(?:kunden(?:nummer)?|kdnr)\s*[:\-]?\s*([0-9]{3,})/i);
+      if (mK) out.kdnr = mK[1];
+
+      const mP = txt.match(/\bpaket(?:nr|nummer)?\s*[:\-]?\s*([0-9]{3,})\b/i);
+      if (mP) out.paket = mP[1];
+
+      let mD = txt.match(/\b(20\d{2})[.\-](\d{2})[.\-](\d{2})\b/);
+      if (mD) out.datum = `${mD[1]}-${mD[2]}-${mD[3]}`;
+      else {
+        mD = txt.match(/\b(\d{2})\.(\d{2})\.(20\d{2})\b/);
+        if (mD) out.datum = `${mD[3]}-${mD[2]}-${mD[1]}`;
+      }
+
+      try { out.rechnungen = (extractInvoiceNumbersFromText(txt) || []); } catch { out.rechnungen = []; }
+      if (out.rechnungen.length) out.type = 'invoice';
+
+      out.items = extractItemsFromText(txt);
+      return out;
+    };
+  })(window);
+
+  /* ===== Datei-Import (JSON/EML/PDF) ===== */
   document.getElementById('importBtn').addEventListener('click',()=>document.getElementById('importFile').click());
   document.getElementById('importFile').addEventListener('change',async e=>{for(const f of Array.from(e.target.files||[])) await handleFile(f); e.target.value='';});
   const dropZone=document.getElementById('dropZone');
@@ -770,7 +764,7 @@ function scanTextForFields(s){
     toast('Dateityp nicht unterstützt');
   }
 
-  /* ========== Export ========== */
+  /* ===== Export ===== */
   function exportJSONdata(data){ const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remi-export.json'; a.click(); }
   function exportCSV(data){
     const rows=[['Kdnr','Paket','Datum','Status','Rechnungen','Summe']];
@@ -794,7 +788,7 @@ function scanTextForFields(s){
     const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remi-differenzen.csv'; a.click();
   }
 
-  /* ========== Buttons & Filter ========== */
+  /* ===== Buttons & Filter ===== */
   const rerenderOnChange = async () => render(await readStore());
   function normalizeDateRange() { const f = dateFrom.value, t = dateTo.value; if (f && t && new Date(f) > new Date(t)) { dateFrom.value=t; dateTo.value=f; } }
   document.getElementById('forceUpdate').addEventListener('click', async ()=>{
@@ -826,7 +820,7 @@ function scanTextForFields(s){
   dateFrom.addEventListener('change', ()=>{ normalizeDateRange(); rerenderOnChange(); });
   dateTo.addEventListener('change', ()=>{ normalizeDateRange(); rerenderOnChange(); });
 
-  /* ========== Gmail ========== */
+  /* ===== Gmail ===== */
   document.getElementById('gmailConnect').addEventListener('click',()=>{
     if(!window.google?.accounts?.oauth2){ toast("Google API nicht geladen – neu laden"); return; }
     gisClient=google.accounts.oauth2.initTokenClient({
@@ -900,7 +894,7 @@ function scanTextForFields(s){
     }catch(e){ console.error(e); toast('Gmail-Fehler: '+(e.message||e)); }
   });
 
-  /* ========== „PDF hinzufügen“ (Rechnung) ========== */
+  /* ===== „PDF hinzufügen“ (Rechnung) ===== */
   document.addEventListener('click', async (e)=>{
     const btn = e.target.closest('.attachPdfBtn');
     if (!btn) return;
@@ -930,7 +924,7 @@ function scanTextForFields(s){
     toast(`PDF zu RG ${rg} verknüpft ✅`);
   });
 
-  /* ========== Öffnen (synchron) ========== */
+  /* ===== Öffnen (synchron) ===== */
   function openPdfNow(fileOrUrl) {
     try {
       let dataUrl=null, url=null;
@@ -972,28 +966,27 @@ function scanTextForFields(s){
         if (!src) { toast('Kein PDF verknüpft.'); return; }
         if (hasData && src.startsWith('data:application/pdf')) { window.open(src,'_blank','noopener'); return; }
         if (/^(blob:|https?:)/.test(src)) { window.open(src,'_blank','noopener'); return; }
-        // Fallback
         openPdfNow(src);
       }
     })();
   }, true);
 
-  /* ========== Init ========== */
+  /* ===== Init ===== */
   (async ()=>{
     setTab('main');
     await set(SETTINGS_KEY, await readSettings());
     let d=await readStore(); d=pruneOld(d||{kundennummer:'',pakete:[],rechnungen:{}}); await writeStore(d);
 
-    await migrateBlobUrlsToDataUrl(d);                 // tote blob: zu dataUrl holen (falls möglich)
-    await enrichPackagesWithRgFromFiles(await readStore()); // RGs aus Paket-PDFs nachtragen
-    await relinkInvoicesFromAllFiles(await readStore());    // Rechnungen mit PDFs verlinken
+    await migrateBlobUrlsToDataUrl(d);
+    await enrichPackagesWithRgFromFiles(await readStore());
+    await relinkInvoicesFromAllFiles(await readStore());
 
     if($('#inputArea')) $('#inputArea').value=JSON.stringify(await readStore(),null,2);
     render(await readStore());
     toast('App geladen ✅ v'+APP_VERSION);
   })();
 
-  /* ========== Admin Login ========== */
+  /* ===== Admin Login ===== */
   const ADMIN_USER = "admin";
   const ADMIN_PASS = "remi2025";
   document.getElementById("adminLink").addEventListener("click", e=>{
@@ -1017,4 +1010,3 @@ function scanTextForFields(s){
   </script>
 </body>
 </html>
-
