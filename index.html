@@ -645,7 +645,60 @@
     if (changed) await writeStore(data);
     return changed;
   }
+<script>
+// ----------- scanTextForFields: Text (Betreff/Body/PDF-Text) → strukturierte Daten -----------
+function scanTextForFields(s){
+  const txt = (s || '').replace(/\r/g,' ');
+  const out = { type:'unknown', paket:'', kdnr:'', datum:'', rechnungen:[], items:[] };
 
+  // Kundennummer
+  {
+    const m = txt.match(/\b(?:kunden(?:nummer)?|kdnr)\s*[:\-]?\s*([0-9]{3,})/i);
+    if (m) out.kdnr = m[1];
+  }
+
+  // Paketnummer
+  {
+    const m = txt.match(/\bpaket(?:nr|nummer)?\s*[:\-]?\s*([0-9]{3,})\b/i);
+    if (m) out.paket = m[1];
+  }
+
+  // Datum (YYYY-MM-DD oder DD.MM.YYYY)
+  {
+    let m = txt.match(/\b(20\d{2})[.\-](\d{2})[.\-](\d{2})\b/);
+    if (m) out.datum = `${m[1]}-${m[2]}-${m[3]}`;
+    else {
+      m = txt.match(/\b(\d{2})\.(\d{2})\.(20\d{2})\b/);
+      if (m) out.datum = `${m[3]}-${m[2]}-${m[1]}`;
+    }
+  }
+
+  // Rechnungsnummern (nutzt deine bestehende Helper-Funktion)
+  try { out.rechnungen = extractInvoiceNumbersFromText(txt) || []; }
+  catch { out.rechnungen = []; }
+  if (out.rechnungen.length) out.type = 'invoice';
+
+  // Positionen grob erkennen (mehrere typische Muster)
+  //  z.B. "3 x Bild der Frau", "Bild der Frau 3 Stk", "2 Stück Artikelname"
+  const lines = txt.split(/\n+/);
+  for (const line of lines) {
+    let m =
+      line.match(/^\s*(\d+)\s*[x×]\s+(.+?)\s*(?:\b(Stk|Stück|Ex|Ex\.)\b.*)?$/i) ||
+      line.match(/^\s*(.+?)\s+(\d+)\s*(Stk|Stück|Ex|Ex\.)\b/i) ||
+      line.match(/^\s*(\d+)\s*(Stk|Stück|Ex|Ex\.)\s+(.+?)\s*$/i);
+    if (m) {
+      // normalisieren (Muster 1: Menge vor Titel, Muster 2/3: Titel vor/nach Menge)
+      if (/^\d+$/.test(m[1]) && m[2]) {
+        out.items.push({ title: (m[2]||m[3]||'').trim(), qty: Number(m[1]) });
+      } else if (m[1] && /^\d+$/.test(m[2])) {
+        out.items.push({ title: m[1].trim(), qty: Number(m[2]) });
+      }
+    }
+  }
+
+  return out;
+}
+</script>  
   /* ========== Datei-Import (JSON/EML/PDF) ========== */
   document.getElementById('importBtn').addEventListener('click',()=>document.getElementById('importFile').click());
   document.getElementById('importFile').addEventListener('change',async e=>{for(const f of Array.from(e.target.files||[])) await handleFile(f); e.target.value='';});
@@ -964,3 +1017,4 @@
   </script>
 </body>
 </html>
+
