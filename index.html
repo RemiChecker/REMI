@@ -1117,5 +1117,45 @@ document.getElementById("adminSubmit").addEventListener("click", ()=>{
   }
 });
 </script>
+  <script>
+/* --- BUTTON/LINK HOTFIX v27.2.8a --- */
+/* 1) Alle <button> explizit zu "type=button" machen (verhindert ungewolltes Submit/Reload) */
+(function(){
+  document.querySelectorAll('button').forEach(b=>{
+    if(!b.getAttribute('type')) b.setAttribute('type','button');
+  });
+})();
+
+/* 2) Alle <a href="#">-Klicks global neutralisieren (kein Hash-Jump, kein „Seite blinzelt“) */
+document.addEventListener('click', function (e) {
+  const a = e.target.closest('a[href="#"]');
+  if (!a) return;
+  e.preventDefault();
+  e.stopPropagation();
+}, true);
+
+/* 3) Falls irgendein JS-Fehler früh abbricht, zeigen wir ihn sichtbar an */
+window.addEventListener('error', (e)=>{
+  try {
+    const el = document.getElementById('toast') || (function(){
+      const d=document.createElement('div'); d.id='toast';
+      d.style.cssText='position:fixed;top:12px;right:12px;background:#c00;color:#fff;padding:.6rem .8rem;border-radius:.5rem;z-index:99999';
+      document.body.appendChild(d); return d;
+    })();
+    el.textContent = 'Fehler: ' + (e?.message || e.toString());
+    el.style.display = 'block';
+  } catch(_) {}
+});
+
+/* 4) Sanity-Check: Markiere interaktive Elemente kurz, um sicherzugehen, dass Events hängen */
+(function(){
+  const ids = ['forceUpdate','repairDeep','saveBtn','loadBtn','clearBtn','gmailConnect','gmailFetch','exportCsv','exportPdf','exportJson','exportDiffCsv'];
+  ids.forEach(id=>{
+    const el = document.getElementById(id);
+    if (el) { el.style.outline='1px dashed #0a84ff44'; el.style.outlineOffset='2px'; }
+  });
+})();
+</script>
 </body>
 </html>
+
